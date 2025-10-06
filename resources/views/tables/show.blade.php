@@ -207,8 +207,8 @@
         $state = $isOpenNow ? 1 : 0;
         $logicalRev = "{$revTs}:{$state}:{$opensTs}";
 
-        $canVoteRoute = \Illuminate\Support\Facades\Route::has('mesas.vote');
-        $canUnvoteRoute = \Illuminate\Support\Facades\Route::has('mesas.unvote');
+        $canVoteRoute = \Illuminate\Support\Facades\Route::has('signups.store');
+        $canUnvoteRoute = \Illuminate\Support\Facades\Route::has('signups.destroy');
         $canOpenRoute = \Illuminate\Support\Facades\Route::has('mesas.open');
         $canCloseRoute = \Illuminate\Support\Facades\Route::has('mesas.close');
         $canEditRoute = \Illuminate\Support\Facades\Route::has('mesas.edit');
@@ -587,7 +587,7 @@
                         @if(!$alreadySigned)
                             @if ($canVoteRoute)
                                 <form method="POST"
-                                      action="{{ route('mesas.vote', $mesa) }}">
+                                      action="{{ route('signups.store', $mesa) }}">
                                     @csrf
                                     <button class="btn ok"
                                             style="width:100%"
@@ -609,7 +609,7 @@
                         @else
                             @if ($canUnvoteRoute)
                                 <form method="POST"
-                                      action="{{ route('mesas.unvote', $mesa) }}">
+                                      action="{{ route('signups.destroy', $mesa) }}">
                                     @csrf
                                     @method('DELETE')
                                     <button class="btn danger"
