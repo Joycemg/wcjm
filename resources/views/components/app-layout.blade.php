@@ -1,25 +1,75 @@
-{{-- resources/views/layouts/app.blade.php --}}
+{{-- resources/views/components/app-layout.blade.php --}}
+@php
+    $appName = config('app.name', 'La Taberna');
+    $titleText = trim((string) ($title ?? ''));
+    $headingText = trim((string) ($heading ?? ''));
+    $pageTitle = $titleText !== ''
+        ? ($titleText . ' · ' . $appName)
+        : ($headingText !== '' ? ($headingText . ' · ' . $appName) : ($appName . ' · Rol & Juegos'));
+
+    $metaDescription = $description ?? config('app.description');
+    $canonicalUrl = $canonical ?? request()->fullUrl();
+    $robots = $noindex ? 'noindex, nofollow' : 'index, follow';
+    $imageUrl = $image
+        ? (\Illuminate\Support\Str::startsWith($image, ['http://', 'https://', '//']) ? $image : asset($image))
+        : null;
+
+    $fluidClass = $fluid ? ' is-fluid' : '';
+@endphp
+
 <!doctype html>
-<html lang="es">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
     <meta charset="utf-8">
-    <title>@yield('title', config('app.name', 'La Taberna') . ' · Rol & Juegos')</title>
+    <title>{{ $pageTitle }}</title>
     <meta name="viewport"
           content="width=device-width, initial-scale=1">
-    <meta name="color-scheme"
-          content="light">
-
-    {{-- CSRF para requests JS --}}
     <meta name="csrf-token"
           content="{{ csrf_token() }}">
-
-    {{-- Hora del servidor en UTC (ms desde epoch) para sincronía de timers --}}
+    <meta name="color-scheme"
+          content="light">
+    <meta name="robots"
+          content="{{ $robots }}">
+    @if($metaDescription)
+        <meta name="description"
+              content="{{ $metaDescription }}">
+    @endif
     <meta name="server-now-ms"
           content="{{ now('UTC')->valueOf() }}">
+    <link rel="canonical"
+          href="{{ $canonicalUrl }}">
+
+    {{-- Open Graph / Twitter --}}
+    <meta property="og:type"
+          content="website">
+    <meta property="og:title"
+          content="{{ $titleText !== '' ? $titleText : $appName }}">
+    @if($metaDescription)
+        <meta property="og:description"
+              content="{{ $metaDescription }}">
+    @endif
+    <meta property="og:url"
+          content="{{ $canonicalUrl }}">
+    @if($imageUrl)
+        <meta property="og:image"
+              content="{{ $imageUrl }}">
+    @endif
+
+    <meta name="twitter:card"
+          content="{{ $imageUrl ? 'summary_large_image' : 'summary' }}">
+    <meta name="twitter:title"
+          content="{{ $titleText !== '' ? $titleText : $appName }}">
+    @if($metaDescription)
+        <meta name="twitter:description"
+              content="{{ $metaDescription }}">
+    @endif
+    @if($imageUrl)
+        <meta name="twitter:image"
+              content="{{ $imageUrl }}">
+    @endif
 
     <style>
-        /* === estilos tal cual los tenías (sin cambios) === */
         :root {
             --bg: #F6EADF;
             --card: #FFF7EE;
@@ -210,6 +260,11 @@
             gap: .6rem
         }
 
+        .is-fluid.top {
+            max-width: none;
+            width: 100%;
+        }
+
         .brand {
             display: flex;
             align-items: center;
@@ -294,6 +349,11 @@
             max-width: 1100px;
             margin: 0 auto;
             padding: clamp(.75rem, 3.5vw, 1rem)
+        }
+
+        main.is-fluid {
+            max-width: none;
+            width: 100%;
         }
 
         .card {
@@ -518,67 +578,83 @@
             background: #FCECEC;
             border-color: #F3B9B9
         }
+
+        .page-header {
+            background: rgba(255, 255, 255, .55);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .page-header .inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: clamp(.75rem, 3vw, 1.25rem);
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            align-items: flex-end;
+        }
+
+        .page-header .inner.is-fluid {
+            max-width: none;
+            width: 100%;
+        }
+
+        .page-header h1 {
+            margin: 0;
+            color: var(--maroon);
+            font-size: clamp(1.4rem, 3.5vw, 2rem);
+        }
+
+        .page-header .meta {
+            display: flex;
+            flex-direction: column;
+            gap: .35rem;
+            flex: 1;
+            min-width: 240px;
+        }
+
+        .page-header .actions-slot {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            align-items: center;
+        }
     </style>
 
+    {{ $head ?? '' }}
     @stack('head')
 </head>
 
 <body>
-    <a href="#main"
-       class="skip-link">{{ __('Saltar al contenido') }}</a>
+    <a class="skip-link"
+       href="#main">{{ __('Saltar al contenido') }}</a>
 
-    <header role="banner"
-            aria-label="{{ __('Barra superior') }}">
-        <div class="top">
+    @php
+        $homeHref = Route::has('home') ? route('home') : url('/');
+    @endphp
+
+    <header role="banner">
+        <div class="top{{ $fluidClass }}">
             <a class="brand"
-               href="{{ route('home') }}">
-                <img src="{{ asset('images/logo.png') }}"
-                     alt="{{ config('app.name', 'La Taberna') }}"
-                     loading="lazy"
-                     decoding="async">
-                <span>{{ config('app.name', 'La Taberna') }} · Rol &amp; Juegos</span>
+               href="{{ $homeHref }}">
+                <img src="{{ asset('images/logo.svg') }}"
+                     alt="{{ $appName }}">
+                <span>{{ $appName }}</span>
             </a>
-
-            {{-- NAV principal --}}
-            <nav aria-label="{{ __('Principal') }}"
-                 style="display:flex;gap:.4rem;margin-left:.5rem">
-                <a class="btn @if(request()->routeIs('home')) active @endif"
-                   href="{{ route('home') }}"
-                   @if(request()->routeIs('home'))
-                       aria-current="page"
-                   @endif>
-                    {{ __('Inicio') }}
-                </a>
-
-                @if (Route::has('mesas.index'))
-                    <a class="btn @if(request()->routeIs('mesas.*')) active @endif"
-                       href="{{ route('mesas.index') }}"
-                       @if(request()->routeIs('mesas.*'))
-                           aria-current="page"
-                       @endif>
-                        {{ __('Mesas') }}
-                    </a>
-                @endif
-            </nav>
 
             <div class="grow"></div>
 
             @auth
                 @php
-                    $defaultAvatar = asset(config('auth.avatars.default', 'images/avatar-default.svg'));
-                    $baseAvatar = auth()->user()->avatar_url ?? $defaultAvatar;
-                    $ver = optional(auth()->user()->updated_at)->timestamp;
-                    $avatar = $baseAvatar . ($ver ? ('?v=' . $ver) : '');
+                    $avatar = auth()->user()->avatar_url ?? asset(config('auth.avatars.default', 'images/avatar-default.svg'));
+                    $logoutAction = Route::has('logout') ? route('logout') : url('/logout');
+                    $profileTarget = Route::has('profile.show')
+                        ? route('profile.show', auth()->user()->profile_param ?? auth()->user())
+                        : url('/profile');
+                @endphp
 
-                    // logout (si no existe la ruta, cae a /logout para evitar 500)
-                    $logoutAction = \Illuminate\Support\Facades\Route::has('logout')
-                        ? route('logout')
-                        : url('/logout');
-                  @endphp
-
-                {{-- Perfil público --}}
                 <a class="btn"
-                   href="{{ route('profile.show', auth()->user()->profile_param ?? auth()->user()) }}"
+                   href="{{ $profileTarget }}"
                    style="gap:.6rem">
                     <img src="{{ $avatar }}"
                          alt="{{ __('Mi avatar') }}"
@@ -601,17 +677,15 @@
                 </form>
             @else
                 @php
-                    // Fallbacks para evitar RouteNotFoundException cuando no hay scaffolding
-                    $loginHref = \Illuminate\Support\Facades\Route::has('login') ? route('login') : url('/login');
-                    $registerHref = \Illuminate\Support\Facades\Route::has('register') ? route('register') : url('/register');
-                  @endphp
+                    $loginHref = Route::has('login') ? route('login') : url('/login');
+                    $registerHref = Route::has('register') ? route('register') : url('/register');
+                @endphp
 
-                {{-- Mantiene href como fallback, pero abre el modal por JS si existe --}}
                 <a class="btn"
                    href="{{ $loginHref }}"
                    data-login-open>{{ __('Entrar') }}</a>
 
-                @if (\Illuminate\Support\Facades\Route::has('register'))
+                @if (Route::has('register'))
                     <a class="btn"
                        href="{{ $registerHref }}"
                        data-register-open>{{ __('Registrarse') }}</a>
@@ -620,9 +694,50 @@
         </div>
     </header>
 
+    @if (!$hideHeader && ($headingText !== '' || !empty($breadcrumbs) || isset($header) || isset($actions)))
+        <div class="page-header">
+            <div class="inner{{ $fluidClass }}">
+                <div class="meta">
+                    @if(!empty($breadcrumbs))
+                        <nav aria-label="{{ __('Migas de pan') }}"
+                             class="muted"
+                             style="font-size:.85rem;display:flex;flex-wrap:wrap;gap:.35rem;align-items:center">
+                            @foreach($breadcrumbs as $index => $crumb)
+                                @if($crumb['url'] && $index < count($breadcrumbs) - 1)
+                                    <a href="{{ $crumb['url'] }}">{{ $crumb['label'] }}</a>
+                                    <span aria-hidden="true">/</span>
+                                @else
+                                    <span aria-current="page"
+                                          style="font-weight:600">{{ $crumb['label'] }}</span>
+                                @endif
+                            @endforeach
+                        </nav>
+                    @endif
+
+                    @if($headingText !== '')
+                        <h1>{{ $headingText }}</h1>
+                    @elseif(isset($header))
+                        {{ $header }}
+                    @endif
+
+                    @if(isset($subheading))
+                        <div class="muted">{{ $subheading }}</div>
+                    @endif
+                </div>
+
+                @isset($actions)
+                    <div class="actions-slot">
+                        {{ $actions }}
+                    </div>
+                @endisset
+            </div>
+        </div>
+    @endif
+
     <main id="main"
           role="main"
-          tabindex="-1">
+          tabindex="-1"
+          class="{{ $fluid ? 'is-fluid' : '' }}">
         @if(session('ok'))
             <div class="flash"
                  role="status"
@@ -646,16 +761,16 @@
             </div>
         @endif
 
-        @yield('content')
+        {{ $slot }}
     </main>
 
-    {{-- ===== MODALES GLOBALES (sólo si existen) ===== --}}
     @php
         $hasLoginModal = \Illuminate\Support\Facades\View::exists('components.auth.login-modal')
             || class_exists(\App\View\Components\Auth\LoginModal::class);
         $hasRegisterModal = \Illuminate\Support\Facades\View::exists('components.auth.register-modal')
             || class_exists(\App\View\Components\Auth\RegisterModal::class);
     @endphp
+
     @if($hasLoginModal)
         <x-auth.login-modal />
     @endif
@@ -663,7 +778,10 @@
         <x-auth.register-modal />
     @endif
 
-    {{-- ===== Script: sync hora servidor ===== --}}
+    <footer style="margin:2rem auto 3rem;max-width:1100px;padding:0 clamp(.75rem,3vw,1rem);color:var(--muted);font-size:.85rem">
+        <div>&copy; {{ date('Y') }} {{ $appName }}</div>
+    </footer>
+
     <script>
         (function () {
             const meta = document.querySelector('meta[name="server-now-ms"]');
@@ -674,7 +792,6 @@
         })();
     </script>
 
-    {{-- ===== Hooks para abrir modales por data-attrs o query ===== --}}
     <script>
         (function () {
             function openAuth(which) { document.dispatchEvent(new CustomEvent('auth:open', { detail: { type: which } })); }
@@ -692,6 +809,7 @@
         })();
     </script>
 
+    {{ $scripts ?? '' }}
     @stack('scripts')
 </body>
 
