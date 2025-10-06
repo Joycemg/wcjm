@@ -106,6 +106,6 @@ Route::middleware($authVerified)->group(function () {
 });
 
 // Perfil público por ID/binding
-Route::get('/u/{user}', [ProfileController::class, 'show'])->whereNumber('user')->name('profile.show');
+Route::get('/u/{user}', [ProfileController::class, 'show'])->name('profile.show');
 
 require __DIR__ . '/auth.php';

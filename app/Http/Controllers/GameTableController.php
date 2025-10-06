@@ -80,6 +80,10 @@ class GameTableController extends Controller
     public function show(GameTable $mesa): ViewContract
     {
         $mesa->loadCount(['signups as signups_count' => fn($q) => $q->where('is_counted', 1)]);
+        $mesa->loadMissing([
+            'manager:id,name,username,email,avatar_path,updated_at',
+            'creator:id,name,username,email,avatar_path,updated_at',
+        ]);
         $mesa->setAttribute('is_open_now', $this->computeIsOpenNow($mesa));
 
         $capacity = max(0, (int) $mesa->capacity);
@@ -100,9 +104,24 @@ class GameTableController extends Controller
         $alreadySigned = $auth ? $mesa->signups()->where('user_id', $auth->id)->exists() : false;
         $myMesaId = $auth ? Signup::where('user_id', $auth->id)->value('game_table_id') : null;
 
+        $isOwner = $auth ? ((int) $mesa->created_by === (int) $auth->id) : false;
+        $isManager = $auth ? ((int) $mesa->manager_id === (int) $auth->id) : false;
+        $isAdmin = $auth ? (($auth->role ?? null) === 'admin') : false;
+        $canManageHonor = $isOwner || $isManager || $isAdmin;
+
         return view(
             $this->pickView(['mesas.show', 'tables.show']),
-            compact('mesa', 'players', 'waitlist', 'alreadySigned', 'myMesaId')
+            compact(
+                'mesa',
+                'players',
+                'waitlist',
+                'alreadySigned',
+                'myMesaId',
+                'isOwner',
+                'isManager',
+                'isAdmin',
+                'canManageHonor'
+            )
         );
     }
 
@@ -110,7 +129,16 @@ class GameTableController extends Controller
     public function create(Request $request): ViewContract
     {
         $this->requireUser($request); // asegura sesión (User) y quita warning
-        return view($this->pickView(['mesas.create', 'tables.create']));
+        $managerCandidates = User::query()
+            ->select(['id', 'name', 'username', 'email'])
+            ->orderByRaw("COALESCE(NULLIF(name, ''), username, email) ASC")
+            ->limit(50)
+            ->get();
+
+        return view(
+            $this->pickView(['mesas.create', 'tables.create']),
+            compact('managerCandidates')
+        );
     }
 
     public function store(Request $request): RedirectResponse
@@ -156,7 +184,25 @@ class GameTableController extends Controller
         $opensAtObj = $mesa->opens_at ? $this->toTz($mesa->opens_at, $tz) : Carbon::now($tz)->setTime(10, 15, 0);
         $opensAtValue = $opensAtObj->format('Y-m-d\TH:i');
 
-        return view($this->pickView(['mesas.edit', 'tables.edit']), compact('mesa', 'tz', 'opensAtValue'));
+        $managerCandidates = User::query()
+            ->select(['id', 'name', 'username', 'email'])
+            ->orderByRaw("COALESCE(NULLIF(name, ''), username, email) ASC")
+            ->limit(50)
+            ->get();
+
+        if ($mesa->manager_id && !$managerCandidates->contains('id', $mesa->manager_id)) {
+            $currentManager = User::query()
+                ->select(['id', 'name', 'username', 'email'])
+                ->find($mesa->manager_id);
+            if ($currentManager) {
+                $managerCandidates->push($currentManager);
+            }
+        }
+
+        return view(
+            $this->pickView(['mesas.edit', 'tables.edit']),
+            compact('mesa', 'tz', 'opensAtValue', 'managerCandidates')
+        );
     }
 
     public function update(Request $request, GameTable $mesa): RedirectResponse
