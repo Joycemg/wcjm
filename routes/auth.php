@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest')->group(function () {
-    // Abrir modales en Home (sin vistas dedicadas)
-    Route::redirect('register', '/?register=1')->name('register');
-    Route::redirect('login', '/?login=1')->name('login');
+    // Formularios públicos (GET)
+    Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
+    Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');
 
     // Registro / Login (POST) con rate-limit
     Route::post('register', [RegisteredUserController::class, 'store'])

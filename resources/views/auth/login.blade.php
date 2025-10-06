@@ -1,18 +1,18 @@
 {{-- resources/views/auth/login.blade.php --}}
 <x-guest-layout>
-    <header class="mb-4">
-        <h1 class="text-xl font-semibold text-gray-900">{{ __('Iniciar sesión') }}</h1>
+    <header class="auth-header">
+        <h1 class="auth-title">{{ __('Iniciar sesión') }}</h1>
     </header>
 
     {{-- Estado y errores globales --}}
-    <x-auth-session-status class="mb-4"
+    <x-auth-session-status class="form-alert form-alert-info"
                            :status="session('status')" />
 
     @if ($errors->any())
         <div role="alert"
-             class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <strong class="block mb-1">{{ __('Revisá los campos:') }}</strong>
-            <ul class="list-disc ps-5">
+             class="form-alert form-alert-error">
+            <strong class="form-alert-title">{{ __('Revisá los campos:') }}</strong>
+            <ul>
                 @foreach ($errors->all() as $err)
                     <li>{{ $err }}</li>
                 @endforeach
@@ -24,15 +24,14 @@
           action="{{ route('login') }}"
           id="login-form"
           novalidate
-          class="space-y-4">
+          class="form-grid">
         @csrf
 
         {{-- Email --}}
-        <div>
+        <div class="form-field">
             <x-input-label for="email"
                            :value="__('Email')" />
             <x-text-input id="email"
-                          class="block mt-1 w-full"
                           type="email"
                           name="email"
                           :value="old('email')"
@@ -42,18 +41,16 @@
                           autocomplete="username"
                           spellcheck="false"
                           autocapitalize="none" />
-            <x-input-error :messages="$errors->get('email')"
-                           class="mt-2" />
+            <x-input-error :messages="$errors->get('email')" />
         </div>
 
         {{-- Password + toggle + CapsLock --}}
-        <div class="mt-4">
+        <div class="form-field">
             <x-input-label for="password"
                            :value="__('Password')" />
 
-            <div class="relative">
+            <div class="password-wrap">
                 <x-text-input id="password"
-                              class="block mt-1 w-full pr-10"
                               type="password"
                               name="password"
                               required
@@ -61,48 +58,45 @@
                               aria-describedby="caps_hint" />
                 <button type="button"
                         id="toggle-pass"
-                        class="absolute inset-y-0 right-0 mr-2 inline-flex items-center text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-1"
+                        class="pass-toggle"
                         aria-label="{{ __('Mostrar/ocultar contraseña') }}">
                     👁
                 </button>
             </div>
 
             <p id="caps_hint"
-               class="mt-1 text-xs text-amber-600 hidden">
+               class="form-hint form-hint-warning is-hidden">
                 {{ __('Aviso: Bloq Mayús está activado') }}
             </p>
 
-            <x-input-error :messages="$errors->get('password')"
-                           class="mt-2" />
+            <x-input-error :messages="$errors->get('password')" />
         </div>
 
         {{-- Remember me --}}
-        <div class="block mt-4">
-            <label for="remember_me"
-                   class="inline-flex items-center">
+        <div class="form-check">
+            <label for="remember_me">
                 <input id="remember_me"
                        type="checkbox"
-                       class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
                        name="remember"
                        {{ old('remember') ? 'checked' : '' }}>
-                <span class="ms-2 text-sm text-gray-600">{{ __('Remember me') }}</span>
+                <span>{{ __('Recordarme') }}</span>
             </label>
         </div>
 
         {{-- Actions --}}
-        <div class="flex items-center justify-between mt-4">
-            <div>
+        <div class="form-actions">
+            <div class="form-links">
                 @if (Route::has('password.request'))
-                    <a class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    <a class="form-link"
                        href="{{ route('password.request') }}">
                         {{ __('Forgot your password?') }}
                     </a>
-                @endif>
+                @endif
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="form-actions-end">
                 @if (Route::has('register'))
-                    <a class="text-sm text-gray-600 hover:text-gray-900 underline"
+                    <a class="form-link"
                        href="{{ route('register') }}">
                         {{ __('Crear cuenta') }}
                     </a>
@@ -137,7 +131,7 @@
                     if (pass && caps) {
                         const onKey = (e) => {
                             const on = e.getModifierState && e.getModifierState('CapsLock');
-                            caps.classList.toggle('hidden', !on);
+                            caps.classList.toggle('is-hidden', !on);
                         };
                         pass.addEventListener('keydown', onKey, { passive: true });
                         pass.addEventListener('keyup', onKey, { passive: true });
