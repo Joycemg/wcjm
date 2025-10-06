@@ -30,6 +30,16 @@
                @endif>
                 {{ __('Panel') }}
             </a>
+
+            @if (Route::has('ranking.honor'))
+                <a class="btn @if(request()->routeIs('ranking.*')) active @endif"
+                   href="{{ route('ranking.honor') }}"
+                   @if(request()->routeIs('ranking.*'))
+                       aria-current="page"
+                   @endif>
+                    {{ __('Ranking de honor') }}
+                </a>
+            @endif
         </div>
 
         {{-- Dropdown usuario (desktop) --}}
@@ -137,6 +147,16 @@
            @endif>
             {{ __('Panel') }}
         </a>
+
+        @if (Route::has('ranking.honor'))
+            <a class="btn @if(request()->routeIs('ranking.*')) active @endif"
+               href="{{ route('ranking.honor') }}"
+               @if(request()->routeIs('ranking.*'))
+                   aria-current="page"
+               @endif>
+                {{ __('Ranking de honor') }}
+            </a>
+        @endif
 
         @auth
             <div class="muted"

@@ -394,4 +394,22 @@ SVG;
 
         return null;
     }
+
+    /**
+     * Permite que las rutas acepten tanto ID numérico como el "profile_param" (@usuario_1).
+     * Si falla, cae al comportamiento por defecto de Eloquent.
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if ($field !== null) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        $found = static::findByProfileParam((string) $value);
+        if ($found) {
+            return $found;
+        }
+
+        return parent::resolveRouteBinding($value, $field);
+    }
 }

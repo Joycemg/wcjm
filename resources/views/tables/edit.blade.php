@@ -70,6 +70,10 @@
                 @error('capacity') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
+            @php
+                $managerCandidates = collect($managerCandidates ?? []);
+            @endphp
+
             {{-- Descripción --}}
             <div style="grid-column:1/-1">
                 <label for="description">{{ __('Descripción') }}</label>
@@ -88,6 +92,93 @@
                      style="font-size:.8rem"
                      aria-live="polite"></div>
                 @error('description') <div class="text-danger">{{ $message }}</div> @enderror
+            </div>
+
+            {{-- Link para unirse / manual --}}
+            <div>
+                <label for="join_url">{{ __('Enlace para la mesa (opcional)') }}</label>
+                <input id="join_url"
+                       type="url"
+                       name="join_url"
+                       value="{{ old('join_url', $mesa->join_url) }}"
+                       maxlength="2048"
+                       placeholder="https://"
+                       aria-describedby="join_url_help"
+                       @error('join_url')
+                           aria-invalid="true"
+                       @enderror>
+                <small id="join_url_help"
+                       class="muted">{{ __('Guardá un enlace directo a la sesión (Discord, Roll20, Foundry, etc.).') }}</small>
+                @error('join_url') <div class="text-danger">{{ $message }}</div> @enderror
+            </div>
+
+            {{-- Encargado / dueño de mesa --}}
+            <div>
+                <label for="manager_id">{{ __('Encargado de la mesa (opcional)') }}</label>
+                <input id="manager_id"
+                       type="number"
+                       name="manager_id"
+                       list="manager-candidates"
+                       inputmode="numeric"
+                       min="1"
+                       step="1"
+                       value="{{ old('manager_id', $mesa->manager_id) }}"
+                       aria-describedby="manager_help"
+                       @error('manager_id')
+                           aria-invalid="true"
+                       @enderror>
+                <small id="manager_help"
+                       class="muted">{{ __('Podés tipear el ID directamente o elegirlo de la lista de usuarios recientes.') }}</small>
+                @error('manager_id') <div class="text-danger">{{ $message }}</div> @enderror
+
+                <datalist id="manager-candidates">
+                    @foreach($managerCandidates as $candidate)
+                        @php
+                            $label = trim(collect([
+                                $candidate->name,
+                                $candidate->username ? '@' . $candidate->username : null,
+                                $candidate->email,
+                            ])->filter()->implode(' · '));
+                            $label = $label !== '' ? $label : 'ID ' . $candidate->id;
+                        @endphp
+                        <option value="{{ $candidate->id }}"
+                                label="{{ $label }}"></option>
+                    @endforeach
+                </datalist>
+            </div>
+
+            {{-- Encargado cuenta como jugador --}}
+            <div>
+                <input type="hidden"
+                       name="manager_counts_as_player"
+                       value="0">
+                <label for="manager_counts_as_player"
+                       style="display:flex;gap:.5rem;align-items:center">
+                    <input id="manager_counts_as_player"
+                           type="checkbox"
+                           name="manager_counts_as_player"
+                           value="1"
+                           {{ old('manager_counts_as_player', $mesa->manager_counts_as_player) ? 'checked' : '' }}>
+                    <span>{{ __('El encargado ocupa un lugar de jugador') }}</span>
+                </label>
+                <small class="muted">{{ __('Desmarcá si querés liberar un asiento adicional para los jugadores.') }}</small>
+                @error('manager_counts_as_player') <div class="text-danger">{{ $message }}</div> @enderror
+            </div>
+
+            {{-- Nota privada para el encargado --}}
+            <div style="grid-column:1/-1">
+                <label for="manager_note">{{ __('Nota interna para el encargado (opcional)') }}</label>
+                <textarea id="manager_note"
+                          name="manager_note"
+                          rows="3"
+                          maxlength="2000"
+                          aria-describedby="manager_note_help"
+                          @error('manager_note')
+                              aria-invalid="true"
+                          @enderror>{{ old('manager_note', $mesa->manager_note) }}</textarea>
+                <small id="manager_note_help"
+                       class="muted">{{ __('Sólo la verá quien administre la mesa.') }}</small>
+                @error('manager_note') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
             {{-- Imagen actual / reemplazo --}}
