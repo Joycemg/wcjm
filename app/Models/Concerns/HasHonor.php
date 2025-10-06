@@ -4,6 +4,7 @@ namespace App\Models\Concerns;
 
 use App\Models\HonorEvent;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -50,10 +51,25 @@ trait HasHonor
         }
 
         if ($slug !== null) {
-            return HonorEvent::firstOrCreate(
-                ['user_id' => $uid, 'slug' => $slug],
-                ['points' => $points, 'reason' => $reason, 'meta' => $meta]
-            );
+            try {
+                return HonorEvent::firstOrCreate(
+                    ['user_id' => $uid, 'slug' => $slug],
+                    ['points' => $points, 'reason' => $reason, 'meta' => $meta]
+                );
+            } catch (QueryException $e) {
+                $errorCode = (string) ($e->getCode() ?? '');
+                $sqlState = (string) ($e->errorInfo[0] ?? '');
+
+                if ($errorCode !== '23000' && $sqlState !== '23000') {
+                    throw $e;
+                }
+
+                // Otro proceso lo insertó: devolvemos el existente (idempotencia).
+                return HonorEvent::query()
+                    ->where('user_id', $uid)
+                    ->where('slug', $slug)
+                    ->firstOrFail();
+            }
         }
 
         return HonorEvent::create([
