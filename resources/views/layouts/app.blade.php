@@ -559,6 +559,16 @@
                         {{ __('Mesas') }}
                     </a>
                 @endif
+
+                @if (Route::has('ranking.honor'))
+                    <a class="btn @if(request()->routeIs('ranking.*')) active @endif"
+                       href="{{ route('ranking.honor') }}"
+                       @if(request()->routeIs('ranking.*'))
+                           aria-current="page"
+                       @endif>
+                        {{ __('Ranking de honor') }}
+                    </a>
+                @endif
             </nav>
 
             <div class="grow"></div>
