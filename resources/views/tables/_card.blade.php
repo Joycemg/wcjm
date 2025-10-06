@@ -79,15 +79,15 @@
             @auth
                 @if($isOpenNow)
                     @if($alreadyThis)
-                        @if (Route::has('mesas.unvote'))
-                            <form method="POST" action="{{ route('mesas.unvote', $mesa) }}">
+                        @if (Route::has('signups.destroy'))
+                            <form method="POST" action="{{ route('signups.destroy', $mesa) }}">
                                 @csrf @method('DELETE')
                                 <button class="btn danger block" type="submit">{{ $label }}</button>
                             </form>
                         @endif
                     @else
-                        @if (Route::has('mesas.vote'))
-                            <form method="POST" action="{{ route('mesas.vote', $mesa) }}">
+                        @if (Route::has('signups.store'))
+                            <form method="POST" action="{{ route('signups.store', $mesa) }}">
                                 @csrf
                                 @if($signedOther)<input type="hidden" name="switch" value="1">@endif
                                 <button class="btn ok block" type="submit"
@@ -104,8 +104,8 @@
                         @endif
                     @endif
                 @elseif(($mesa->is_open ?? false) && $opensTs > time())
-                    @if (Route::has('mesas.vote'))
-                        <form method="POST" action="{{ route('mesas.vote', $mesa) }}">
+                    @if (Route::has('signups.store'))
+                        <form method="POST" action="{{ route('signups.store', $mesa) }}">
                             @csrf
                             <button class="btn ok block js-enable-at" type="submit"
                                 disabled data-enable-at="{{ $opensTs }}" aria-describedby="hint-{{ $mesa->id }}"
