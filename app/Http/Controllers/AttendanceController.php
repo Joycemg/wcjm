@@ -6,6 +6,7 @@ use App\Models\GameTable;
 use App\Models\Signup;
 use App\Models\HonorEvent;
 use App\Models\User;
+use App\Support\DatabaseUtils;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
@@ -39,11 +40,11 @@ class AttendanceController extends Controller
         DB::transaction(function () use ($data, $mesa, $signup, $user) {
             // Bloqueo pesimista para consistencia en hosting compartido
             /** @var Signup $row */
-            $row = Signup::query()
-                ->select(['id', 'user_id', 'game_table_id', 'attended', 'behavior'])
-                ->whereKey($signup->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+            $row = DatabaseUtils::applyPessimisticLock(
+                Signup::query()
+                    ->select(['id', 'user_id', 'game_table_id', 'attended', 'behavior'])
+                    ->whereKey($signup->id)
+            )->firstOrFail();
 
             $prevAttended = (bool) ($row->attended ?? false);
             $prevBehavior = (string) ($row->behavior ?? 'regular');

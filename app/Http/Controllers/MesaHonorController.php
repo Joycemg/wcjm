@@ -7,6 +7,7 @@ use App\Models\GameTable;
 use App\Models\Signup;
 use App\Models\User;
 use App\Services\HonorRules;
+use App\Support\DatabaseUtils;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,7 +37,9 @@ class MesaHonorController extends Controller
         DB::transaction(function () use ($signup, $auth) {
             // Releer con lock para evitar carreras
             /** @var Signup $row */
-            $row = Signup::query()->whereKey($signup->id)->lockForUpdate()->firstOrFail();
+            $row = DatabaseUtils::applyPessimisticLock(
+                Signup::query()->whereKey($signup->id)
+            )->firstOrFail();
 
             if (!$row->attendance_confirmed_at) {
                 $row->attendance_confirmed_at = now();
@@ -70,7 +73,9 @@ class MesaHonorController extends Controller
 
         DB::transaction(function () use ($signup, $auth) {
             /** @var Signup $row */
-            $row = Signup::query()->whereKey($signup->id)->lockForUpdate()->firstOrFail();
+            $row = DatabaseUtils::applyPessimisticLock(
+                Signup::query()->whereKey($signup->id)
+            )->firstOrFail();
 
             if (!$row->no_show_at) {
                 $row->no_show_at = now();
