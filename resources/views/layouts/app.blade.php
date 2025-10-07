@@ -19,6 +19,10 @@
     <meta name="server-now-ms" content="{{ now('UTC')->valueOf() }}">
     <title>@yield('title', $appName)</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Righteous&display=swap" rel="stylesheet">
+
     @if ($hasViteBuild)
         {{-- Usa assets generados por Vite si existen --}}
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -32,9 +36,12 @@
 
     <style>
         :root {
-            --muted: #6b7280;
-            --maroon: #7b2d26;
-            --border: #e5e7eb;
+            --muted: #4c566a;
+            --maroon: #b3472d;
+            --border: #d8dee9;
+            --night: #1f2937;
+            --amber: #fbbf24;
+            --emerald: #34d399;
         }
 
         .muted {
@@ -49,41 +56,81 @@
             font-size: .75rem
         }
 
+        body {
+            font-family: 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.25) 0, rgba(255, 255, 255, 0) 60%),
+                radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.25) 0, rgba(255, 255, 255, 0) 60%),
+                linear-gradient(135deg, #0f172a 0%, #1e293b 35%, #273549 70%, #2f3f57 100%);
+            color: #1f2937;
+            min-height: 100vh;
+        }
+
+        .app-title {
+            font-family: 'Righteous', cursive;
+            letter-spacing: .02em;
+        }
+
         .container {
-            max-width: 1000px;
+            max-width: 1100px;
             margin: 0 auto;
-            padding: 1rem
+            padding: 1.25rem;
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
             gap: .5rem;
-            border: 1px solid var(--border);
-            border-radius: .75rem;
-            padding: .5rem .9rem
+            border-radius: 999px;
+            padding: .55rem 1.1rem;
+            font-weight: 600;
+            letter-spacing: .01em;
+            background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,0));
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+            transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.3);
+            background: linear-gradient(135deg, rgba(255,255,255,.24), rgba(255,255,255,0.05));
         }
 
         .btn.gold {
-            background: #fef3c7;
-            border-color: #f59e0b
+            background: linear-gradient(135deg, #fbbf24, #f97316);
+            border-color: rgba(251, 191, 36, .8);
+            color: #1f2937;
+            box-shadow: 0 8px 18px rgba(251, 191, 36, 0.35);
+        }
+
+        .btn.gold:hover {
+            background: linear-gradient(135deg, #facc15, #fb923c);
         }
 
         .btn.red {
-            background: #fee2e2;
-            border-color: #ef4444
+            background: linear-gradient(135deg, #f87171, #ef4444);
+            border-color: rgba(239, 68, 68, .85);
+            box-shadow: 0 8px 18px rgba(248, 113, 113, 0.35);
+            color: #fff;
         }
 
         .btn.green {
-            background: #dcfce7;
-            border-color: #22c55e
+            background: linear-gradient(135deg, #34d399, #059669);
+            border-color: rgba(5, 150, 105, .75);
+            box-shadow: 0 8px 18px rgba(52, 211, 153, 0.35);
+            color: #032b1f;
         }
 
         .card {
-            background: #fff;
-            border: 1px solid var(--border);
-            border-radius: 1rem;
-            padding: 1rem
+            background: linear-gradient(145deg, rgba(255,255,255,.95), rgba(255,255,255,.85));
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 1.25rem;
+            padding: 1.25rem;
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.22);
+            backdrop-filter: blur(6px);
         }
 
         .avatar {
@@ -108,10 +155,13 @@
 </head>
 
 <body class="bg-gray-50 text-gray-900">
-    <header class="border-b bg-white">
-        <div class="container flex items-center justify-between">
+    <header class="border-b" style="border-color: rgba(255,255,255,.08); background: linear-gradient(135deg, rgba(15,23,42,.85), rgba(30,41,59,.85)); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 20;">
+        <div class="container flex items-center justify-between" style="gap: 1.5rem;">
             <a href="{{ route('home') }}"
-               class="font-bold text-lg">{{ config('app.name', 'La Taberna') }}</a>
+               class="font-bold text-lg app-title text-white flex items-center gap-2">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#fbbf24,#f97316);color:#111827;box-shadow:0 8px 18px rgba(251,191,36,.35);">🎲</span>
+                {{ config('app.name', 'La Taberna') }}
+            </a>
             <nav class="flex items-center gap-2">
                 <a class="btn"
                    href="{{ route('mesas.index') }}">Mesas</a>
@@ -131,7 +181,7 @@
         </div>
     </header>
 
-    <main class="container">
+    <main class="container" style="padding-top: 2.5rem; padding-bottom: 3rem;">
         @if (session('ok'))
             <div class="card mb-3 bg-green-50 border-green-300">{{ session('ok') }}</div>
         @endif
@@ -142,8 +192,8 @@
         @yield('content')
     </main>
 
-    <footer class="border-t mt-8 py-6 text-center text-sm text-gray-500 bg-white">
-        © {{ date('Y') }} {{ config('app.name', 'La Taberna') }}
+    <footer class="mt-8 py-6 text-center text-sm text-gray-200" style="border-top: 1px solid rgba(255,255,255,.1); background: linear-gradient(135deg, rgba(15,23,42,.85), rgba(30,41,59,.85));">
+        © {{ date('Y') }} {{ config('app.name', 'La Taberna') }} · Comunidad de Juegos de Mesa
     </footer>
 
     @stack('scripts')
