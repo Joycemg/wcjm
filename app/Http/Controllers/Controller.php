@@ -13,25 +13,27 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
-class Controller extends BaseController
+/**
+ * Controller base con utilidades para:
+ *  - TZ/fechas (CarbonImmutable)
+ *  - Validación tipada
+ *  - JSON helpers (ok/fail/paginated)
+ *  - Rate-limit (RFC 9298) + ETag/Cache
+ */
+abstract class Controller extends BaseController
 {
     use AuthorizesRequests, ValidatesRequests;
 
-    /** Paginación por defecto y máxima */
     protected const DEFAULT_PER_PAGE = 15;
     protected const MAX_PER_PAGE = 100;
 
     /** Flags JSON por defecto (UTF-8 seguro) */
     protected int $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
 
-    /** Memo del huso “de pantalla” por request */
     private ?string $memoTz = null;
 
-    /* =========================
-     *  TIMEZONE HELPERS
-     * ========================= */
+    /* ========================= TZ/Fechas ========================= */
 
-    /** Huso “de pantalla” si existe; si no, el de la app; si no, UTC */
     protected function tz(): string
     {
         if ($this->memoTz !== null)
@@ -39,47 +41,30 @@ class Controller extends BaseController
         return $this->memoTz = (string) config('app.display_timezone', config('app.timezone', 'UTC'));
     }
 
-    /** now() INMUTABLE en el huso configurado */
     protected function nowTz(): CarbonImmutable
     {
         return CarbonImmutable::now($this->tz());
     }
 
-    /** ISO-8601 (UTC) desde un CarbonImmutable */
     protected function toIsoUtc(CarbonImmutable $dt): string
     {
         return $dt->utc()->toIso8601String();
     }
 
-    /** Epoch en milisegundos (UTC) desde un CarbonImmutable */
     protected function toEpochMs(CarbonImmutable $dt): int
     {
         return (int) $dt->utc()->valueOf();
     }
 
-    /* =========================
-     *  VALIDATION & INPUT
-     * ========================= */
+    /* ========================= Validación/Input ========================= */
 
-    /** Versión typed de validate que devuelve el array validado */
-    protected function validateInput(
-        Request $request,
-        array $rules,
-        array $messages = [],
-        array $attributes = []
-    ): array {
+    protected function validateInput(Request $request, array $rules, array $messages = [], array $attributes = []): array
+    {
         /** @var array $validated */
         $validated = $request->validate($rules, $messages, $attributes);
         return $validated;
     }
 
-    /**
-     * Lee ?per_page con límites sanos.
-     * - Acepta enteros en string
-     * - Ignora arrays/invalid
-     * - Clampa [1..$max]
-     * - Acepta "all" => $max
-     */
     protected function perPage(Request $request, ?int $default = null, ?int $max = null): int
     {
         $default ??= self::DEFAULT_PER_PAGE;
@@ -103,33 +88,23 @@ class Controller extends BaseController
         return $pp;
     }
 
-    /* =========================
-     *  AUTH HELPERS
-     * ========================= */
+    /* ========================= Auth helpers ========================= */
 
-    /** Obtiene el usuario autenticado tipado o null. */
     protected function optionalUser(Request $request): ?User
     {
-        $user = $request->user();
-
-        return $user instanceof User ? $user : null;
+        $u = $request->user();
+        return $u instanceof User ? $u : null;
     }
 
-    /** Obtiene el usuario autenticado tipado o aborta con 403. */
     protected function requireUser(Request $request): User
     {
-        $user = $this->optionalUser($request);
-
-        abort_unless($user instanceof User, 403);
-
-        return $user;
+        $u = $this->optionalUser($request);
+        abort_unless($u instanceof User, 403, 'Necesitás iniciar sesión.');
+        return $u;
     }
 
-    /* =========================
-     *  JSON RESPONSES
-     * ========================= */
+    /* ========================= JSON helpers ========================= */
 
-    /** Flags JSON actuales (agrega pretty si ?pretty=1 y APP_DEBUG=true) */
     protected function currentJsonFlags(): int
     {
         $flags = $this->jsonFlags;
@@ -139,19 +114,16 @@ class Controller extends BaseController
         return $flags;
     }
 
-    /** Helper base para responder JSON con opciones controladas */
     protected function json(mixed $payload, int $status = 200, array $headers = []): JsonResponse
     {
         return response()->json($payload, $status, $headers, $this->currentJsonFlags());
     }
 
-    /** Respuesta JSON estándar OK */
     protected function jsonOk(array $data = [], array $meta = [], int $status = 200): JsonResponse
     {
         return $this->json(['ok' => true, 'data' => $data, 'meta' => $meta], $status);
     }
 
-    /** Respuesta JSON 201 (creado) con Location opcional */
     protected function jsonCreated(array $data = [], array $meta = [], ?string $location = null): JsonResponse
     {
         $res = $this->jsonOk($data, $meta, 201);
@@ -160,23 +132,16 @@ class Controller extends BaseController
         return $res;
     }
 
-    /** 204 No Content (sin body) */
     protected function jsonNoContent(): HttpResponse
     {
         return response()->noContent();
     }
 
-    /** Respuesta JSON de error con mensaje y detalles */
-    protected function jsonFail(
-        string $message,
-        int $status = 400,
-        array $errors = [],
-        array $meta = []
-    ): JsonResponse {
+    protected function jsonFail(string $message, int $status = 400, array $errors = [], array $meta = []): JsonResponse
+    {
         return $this->json(['ok' => false, 'message' => $message, 'errors' => $errors, 'meta' => $meta], $status);
     }
 
-    /** Respuesta JSON paginada (incluye links y pagination) */
     protected function jsonPaginated(LengthAwarePaginator $paginator, array $meta = []): JsonResponse
     {
         $links = [
@@ -201,17 +166,8 @@ class Controller extends BaseController
         );
     }
 
-    /* =========================
-     *  RATE LIMIT (RFC 9298)
-     * ========================= */
+    /* ========================= Rate-limit (RFC 9298) ========================= */
 
-    /**
-     * Aplica rate-limit y, si excede, responde 429 con headers.
-     * Si NO excede, incrementa el contador y retorna null.
-     *
-     * $abilityKey: identifica la acción (p.ej. "ranking:honor:index").
-     * $by: "auto" | "user" | "ip" (auto: user si hay sesión; si no, IP+UA).
-     */
     protected function enforceRateLimit(
         Request $request,
         ?string $abilityKey = null,
@@ -236,11 +192,10 @@ class Controller extends BaseController
             return $resp;
         }
 
-        RateLimiter::hit($key, $decaySeconds); // TTL = $decaySeconds
+        RateLimiter::hit($key, $decaySeconds);
         return null;
     }
 
-    /** Adjunta headers de rate-limit a una respuesta 2xx. */
     protected function withRateHeaders(
         HttpResponse $response,
         Request $request,
@@ -254,14 +209,12 @@ class Controller extends BaseController
         return $response;
     }
 
-    /** Clave: ability + fingerprint de cliente. */
     protected function rateKey(Request $request, ?string $abilityKey, string $by = 'auto'): string
     {
         $ability = $abilityKey ?: (strtoupper($request->method()) . ':' . trim($request->path(), '/'));
         return "rate:{$ability}:" . $this->clientFingerprint($request, $by);
     }
 
-    /** Fingerprint del cliente: user id | ip | ip+ua (barato para hosting compartido). */
     protected function clientFingerprint(Request $request, string $by = 'auto'): string
     {
         if ($by === 'user' && $request->user()) {
@@ -277,7 +230,6 @@ class Controller extends BaseController
         return 'ipua:' . $request->ip() . ':' . substr(sha1($ua), 0, 12);
     }
 
-    /** Headers estándar (RFC 9298) + legacy X-RateLimit-*. */
     protected function rateHeaders(string $key, int $max, int $decay, bool $exceeded = false): array
     {
         $remaining = max(0, RateLimiter::remaining($key, $max));
@@ -286,26 +238,24 @@ class Controller extends BaseController
         $std = [
             'RateLimit-Limit' => (string) $max,
             'RateLimit-Remaining' => (string) $remaining,
-            'RateLimit-Reset' => (string) $resetIn,               // seg hasta reset
+            'RateLimit-Reset' => (string) $resetIn,
         ];
 
         $legacy = [
             'X-RateLimit-Limit' => (string) $max,
             'X-RateLimit-Remaining' => (string) $remaining,
-            'X-RateLimit-Reset' => (string) (time() + $resetIn),  // epoch seg
+            'X-RateLimit-Reset' => (string) (time() + $resetIn),
         ];
 
-        if ($exceeded)
+        if ($exceeded) {
             $std['Retry-After'] = (string) $resetIn;
+        }
 
         return $std + $legacy;
     }
 
-    /* =========================
-     *  ETag / CACHE
-     * ========================= */
+    /* ========================= ETag / Cache ========================= */
 
-    /** Genera un ETag (débil por defecto) a partir de un seed liviano. */
     protected function makeEtag(mixed $seed, bool $weak = true): string
     {
         if (is_array($seed) || is_object($seed)) {
@@ -313,23 +263,14 @@ class Controller extends BaseController
         } else {
             $seed = (string) $seed;
         }
-        $hash = sha1($seed); // barato y suficiente en shared hosting
+        $hash = sha1($seed);
         return ($weak ? 'W/' : '') . '"' . $hash . '"';
     }
 
-    /**
-     * Si If-None-Match coincide (comparación débil), devuelve 304 con headers.
-     * Si no, retorna null y el caller debe responder 200 con el mismo ETag.
-     * Para usuarios autenticados aplica cache privada/no-store.
-     */
-    protected function maybeNotModified(
-        Request $request,
-        string $etag,
-        int $maxAge,
-        bool $privateForAuth = true
-    ): ?HttpResponse {
+    protected function maybeNotModified(Request $request, string $etag, int $maxAge, bool $privateForAuth = true): ?HttpResponse
+    {
         $raw = (string) $request->header('If-None-Match', '');
-        $clientEtags = array_filter(array_map('trim', $raw === '' ? [] : explode(',', $raw)));
+        $clientEtgs = array_filter(array_map('trim', $raw === '' ? [] : explode(',', $raw)));
 
         $headers = [
             'ETag' => $etag,
@@ -337,7 +278,7 @@ class Controller extends BaseController
             'Vary' => $this->varyFor($request, $privateForAuth),
         ];
 
-        foreach ($clientEtags as $candidate) {
+        foreach ($clientEtgs as $candidate) {
             if ($candidate === '*' || $this->etagEqualsWeak($candidate, $etag)) {
                 return response('', 304, $headers);
             }
@@ -345,7 +286,6 @@ class Controller extends BaseController
         return null;
     }
 
-    /** Agrega ETag y Cache-Control a una respuesta 200. */
     protected function withCacheHeaders(
         HttpResponse $response,
         Request $request,
@@ -359,7 +299,6 @@ class Controller extends BaseController
         return $response;
     }
 
-    /** Directiva de cache según autenticación. */
     protected function cacheDirective(Request $request, int $maxAge, bool $privateForAuth): string
     {
         if ($privateForAuth && $request->user()) {
@@ -368,7 +307,6 @@ class Controller extends BaseController
         return "public, max-age={$maxAge}";
     }
 
-    /** Cabecera Vary adecuada. */
     protected function varyFor(Request $request, bool $privateForAuth): string
     {
         return $privateForAuth && $request->user()
@@ -376,7 +314,6 @@ class Controller extends BaseController
             : 'Accept, Accept-Encoding';
     }
 
-    /** Comparación débil de ETags (ignora W/ y comillas). */
     private function etagEqualsWeak(string $a, string $b): bool
     {
         $norm = static fn(string $t) => trim(str_ireplace('W/', '', $t), " \t\n\r\0\x0B\"");

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasHonor;
+use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -12,14 +14,31 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use DateTimeInterface;
 
 /**
- * @property-read string      $profile_param
- * @property-read string      $handle
- * @property-read string      $avatar_url
+ * App\Models\User
+ *
+ * @property int $id
+ * @property string|null $name
+ * @property string|null $username
+ * @property string|null $email
+ * @property string|null $password
+ * @property string|null $role
+ * @property string|null $avatar_path
+ * @property string|null $bio
+ * @property CarbonImmutable|null $email_verified_at
+ * @property CarbonImmutable|null $last_login_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
+ *
+ * @property-read string $profile_param
+ * @property-read string $handle
+ * @property-read string $avatar_url
  * @property-read string|null $display_name
- * @property-read string      $initials
+ * @property-read string $initials
+ *
+ * @method static Builder|self search(?string $term)
+ * @method static Builder|self admins()
  */
 class User extends Authenticatable // implements MustVerifyEmail
 {
@@ -45,21 +64,19 @@ class User extends Authenticatable // implements MustVerifyEmail
     protected $hidden = [
         'password',
         'remember_token',
-        // Jetstream/2FA (si existieran)
         'two_factor_recovery_codes',
         'two_factor_secret',
     ];
 
     /** @var array<string,string> */
     protected $casts = [
-        'email_verified_at' => 'datetime',
-        // Laravel 10+: hashea automáticamente al asignar
+        'email_verified_at' => 'immutable_datetime',
+        'last_login_at' => 'immutable_datetime',
+        'created_at' => 'immutable_datetime',
+        'updated_at' => 'immutable_datetime',
         'password' => 'hashed',
-        // Si no existe la columna, no afecta
-        'last_login_at' => 'datetime',
     ];
 
-    /** Atributos calculados que viajan en JSON */
     /** @var array<int,string> */
     protected $appends = [
         'profile_param',
@@ -89,80 +106,69 @@ class User extends Authenticatable // implements MustVerifyEmail
      * Scopes
      * ========================= */
 
-    /** Búsqueda por nombre, username o email (LIKE con escape de % y _) */
     public function scopeSearch(Builder $q, ?string $term): Builder
     {
         $term = trim((string) $term);
-        if ($term === '') {
+        if ($term === '')
             return $q;
-        }
 
         $like = '%' . addcslashes($term, "%_\\") . '%';
 
-        return $q->where(function ($w) use ($like) {
+        return $q->where(function (Builder $w) use ($like) {
             $w->where('name', 'LIKE', $like)
                 ->orWhere('username', 'LIKE', $like)
                 ->orWhere('email', 'LIKE', $like);
         });
     }
 
-    /** Usuarios admins (si usás string/enum role) */
     public function scopeAdmins(Builder $q): Builder
     {
         return $q->where('role', 'admin');
     }
 
     /* =========================
-     * Mutators (setters) & Normalizaciones
+     * Mutators & Normalizaciones
      * ========================= */
 
-    /** name: trim + squish + límite */
     protected function name(): Attribute
     {
-        return Attribute::set(function (?string $value) {
-            $name = Str::of((string) $value)->squish()->trim();
-            return (string) Str::limit($name, 120, '');
-        });
+        return Attribute::set(
+            fn(?string $value) =>
+            $value ? Str::limit(Str::of($value)->squish()->trim(), 120, '') : null
+        );
     }
 
-    /**
-     * username: normaliza (ascii, lowercase, espacios->_, sólo [a-z0-9._-],
-     * colapsa duplicados, quita bordes). Si queda vacío => null.
-     */
     protected function username(): Attribute
     {
         return Attribute::set(function ($value) {
-            if ($value === null) {
+            if ($value === null)
                 return null;
-            }
 
             $u = Str::of((string) $value)->trim()->lower();
-            $u = Str::of(Str::ascii($u));
-            $u = $u->replaceMatches('/\s+/', '_')
+            $u = Str::of(Str::ascii($u))
+                ->replaceMatches('/\s+/', '_')
                 ->replaceMatches('/[^a-z0-9._-]/', '')
                 ->replaceMatches('/([._-])\1+/', '$1')
                 ->replaceMatches('/^[._-]+|[._-]+$/', '');
-            $u = (string) $u;
 
-            return $u !== '' ? $u : null;
+            return $u !== '' ? (string) $u : null;
         });
     }
 
-    /** email: trim + lowercase */
     protected function email(): Attribute
     {
-        return Attribute::set(function (?string $value) {
-            return $value === null ? null : Str::lower(trim($value));
-        });
+        return Attribute::set(
+            fn(?string $value) =>
+            $value ? Str::lower(trim($value)) : null
+        );
     }
 
-    /** bio: sin HTML, espacios normalizados, tope 2000 */
     protected function bio(): Attribute
     {
         return Attribute::set(function ($value) {
-            if ($value === null) {
+            if ($value === null)
                 return null;
-            }
+
             $clean = strip_tags((string) $value);
             $clean = preg_replace('/\s+/', ' ', $clean) ?? '';
             $clean = trim($clean);
@@ -171,65 +177,44 @@ class User extends Authenticatable // implements MustVerifyEmail
     }
 
     /* =========================
-     * Accessors (getters) para UI/API
+     * Accessors
      * ========================= */
 
-    /**
-     * Parámetro para la URL del perfil:
-     * - sin username  => "2"
-     * - con username  => "@usuario_2"
-     *
-     * Uso: route('profile.show', $user->profile_param)
-     */
     protected function profileParam(): Attribute
     {
-        return Attribute::get(function (): string {
-            return $this->username
-                ? '@' . $this->username . '_' . $this->id
-                : (string) $this->id;
-        });
+        return Attribute::get(
+            fn(): string =>
+            $this->username ? '@' . $this->username . '_' . $this->id : (string) $this->id
+        );
     }
 
-    /** Handle visible "usuario#2" (o name si no hay username) */
     protected function handle(): Attribute
     {
-        return Attribute::get(function (): string {
-            $name = $this->username ?: ($this->name ?: 'usuario');
-            return "{$name}#{$this->id}";
-        });
+        return Attribute::get(
+            fn(): string =>
+            ($this->username ?: $this->name ?: 'usuario') . '#' . $this->id
+        );
     }
 
-    /**
-     * URL del avatar con estrategia en cascada:
-     * - avatar_path absoluto → tal cual
-     * - Storage::url(avatar_path) (local/S3)
-     * - Gravatar (si está habilitado en config)
-     * - Imagen local por defecto (config)
-     * - Fallback SVG con iniciales
-     */
     protected function avatarUrl(): Attribute
     {
         return Attribute::get(function (): string {
             $path = (string) ($this->avatar_path ?? '');
 
-            // 1) Path absoluto / data URI
             if ($path !== '' && Str::startsWith($path, ['http://', 'https://', '//', 'data:'])) {
                 return $path;
             }
 
-            // 2) Storage público / S3
             if ($path !== '') {
                 try {
                     return (string) Storage::url($path);
                 } catch (\Throwable) {
-                    // 3) Fallback local si no hay disk configurado
                     return function_exists('asset')
                         ? asset('storage/' . ltrim($path, '/'))
                         : '/storage/' . ltrim($path, '/');
                 }
             }
 
-            // 4) Gravatar (opcional)
             if ((bool) config('auth.avatars.use_gravatar', false) && !empty($this->email)) {
                 $hash = md5(strtolower(trim((string) $this->email)));
                 $size = (int) config('auth.avatars.gravatar_size', 256);
@@ -237,7 +222,6 @@ class User extends Authenticatable // implements MustVerifyEmail
                 return "https://www.gravatar.com/avatar/{$hash}?s={$size}&d={$default}";
             }
 
-            // 5) Imagen por defecto (configurable)
             $default = (string) config('auth.avatars.default', 'images/avatar-default.svg');
             if ($default !== '') {
                 return Str::startsWith($default, ['http://', 'https://', '//'])
@@ -245,35 +229,29 @@ class User extends Authenticatable // implements MustVerifyEmail
                     : (function_exists('asset') ? asset($default) : '/' . ltrim($default, '/'));
             }
 
-            // 6) Fallback SVG con iniciales
             return $this->initialsDataUri($this->display_name ?? 'U', 128);
         });
     }
 
-    /** Nombre visible (name > username > email local-part) */
     protected function displayName(): Attribute
     {
         return Attribute::get(function (): ?string {
-            if (!empty($this->name)) {
+            if ($this->name)
                 return (string) $this->name;
-            }
-            if (!empty($this->username)) {
+            if ($this->username)
                 return (string) $this->username;
-            }
-            if (!empty($this->email)) {
+            if ($this->email)
                 return Str::before((string) $this->email, '@');
-            }
             return null;
         });
     }
 
-    /** Iniciales (para placeholders, badges, etc.) */
     protected function initials(): Attribute
     {
-        return Attribute::get(function (): string {
-            $seed = $this->display_name ?? (string) ($this->email ?? 'U');
-            return $this->initialsFrom($seed);
-        });
+        return Attribute::get(
+            fn(): string =>
+            $this->initialsFrom($this->display_name ?? (string) ($this->email ?? 'U'))
+        );
     }
 
     /* =========================
@@ -291,9 +269,7 @@ class User extends Authenticatable // implements MustVerifyEmail
         $svg = <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="{$size}" height="{$size}" viewBox="0 0 {$size} {$size}" role="img" aria-label="{$text}">
   <rect width="100%" height="100%" rx="{$rx}" ry="{$rx}" fill="{$bg}"/>
-  <text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu" font-size="{$fontSize}" font-weight="700" fill="{$fg}">
-    {$text}
-  </text>
+  <text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu" font-size="{$fontSize}" font-weight="700" fill="{$fg}">{$text}</text>
 </svg>
 SVG;
 
@@ -303,16 +279,14 @@ SVG;
     private function initialsFrom(string $value): string
     {
         $v = trim($value);
-        if (str_contains($v, '@')) {
+        if (str_contains($v, '@'))
             $v = explode('@', $v)[0];
-        }
         $parts = preg_split('/[\s._-]+/u', $v, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $letters = [];
         foreach ($parts as $p) {
             $letters[] = $this->u_upper($this->u_substr($p, 0, 1));
-            if (count($letters) === 2) {
+            if (count($letters) === 2)
                 break;
-            }
         }
         return $letters ? implode('', $letters) : 'U';
     }
@@ -335,22 +309,24 @@ SVG;
         return $palette[$hash % count($palette)];
     }
 
-    /** Unicode helpers sin mbstring (funcionan igual si tenés mbstring) */
     private function u_substr(string $s, int $start, int $len = 1): string
     {
-        return function_exists('mb_substr') ? mb_substr($s, $start, $len, 'UTF-8') : substr($s, $start, $len);
+        return function_exists('mb_substr')
+            ? mb_substr($s, $start, $len, 'UTF-8')
+            : substr($s, $start, $len);
     }
 
     private function u_upper(string $s): string
     {
-        return function_exists('mb_strtoupper') ? mb_strtoupper($s, 'UTF-8') : strtoupper($s);
+        return function_exists('mb_strtoupper')
+            ? mb_strtoupper($s, 'UTF-8')
+            : strtoupper($s);
     }
 
     /* =========================
      * Serialización
      * ========================= */
 
-    /** Fechas JSON consistentes (ISO 8601) */
     protected function serializeDate(DateTimeInterface $date): string
     {
         return $date->format(DATE_ATOM);
@@ -360,56 +336,30 @@ SVG;
      * Utils
      * ========================= */
 
-    /** Syntactic sugar de rol admin (evita múltiples comparaciones) */
     public function isAdmin(): bool
     {
         return ($this->role ?? null) === 'admin';
     }
 
-    /**
-     * Helper para parsear un profile_param y encontrar un usuario.
-     * Soporta:
-     *   - "15"
-     *   - "@usuario_15"
-     */
     public static function findByProfileParam(string $param): ?self
     {
         $param = trim($param);
-
-        // Caso simple: es un ID puro
-        if (ctype_digit($param)) {
+        if ($param !== '' && ctype_digit($param))
             return static::find((int) $param);
-        }
 
-        // Formato @username_id
-        if (Str::startsWith($param, '@')) {
+        if (Str::startsWith($param, '@'))
             $param = ltrim($param, '@');
-        }
-
         $parts = explode('_', $param);
-        $id = (int) array_pop($parts); // último segmento
-        if ($id > 0) {
-            return static::find($id);
-        }
-
-        return null;
+        $id = (int) array_pop($parts);
+        return $id > 0 ? static::find($id) : null;
     }
 
-    /**
-     * Permite que las rutas acepten tanto ID numérico como el "profile_param" (@usuario_1).
-     * Si falla, cae al comportamiento por defecto de Eloquent.
-     */
     public function resolveRouteBinding($value, $field = null)
     {
-        if ($field !== null) {
+        if ($field !== null)
             return parent::resolveRouteBinding($value, $field);
-        }
 
-        $found = static::findByProfileParam((string) $value);
-        if ($found) {
-            return $found;
-        }
-
-        return parent::resolveRouteBinding($value, $field);
+        return static::findByProfileParam((string) $value)
+            ?? parent::resolveRouteBinding($value, $field);
     }
 }

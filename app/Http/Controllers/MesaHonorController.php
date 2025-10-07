@@ -12,21 +12,23 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class MesaHonorController extends Controller
+/**
+ * Acciones rápidas de honor sobre una mesa (asistencia/no-show/comportamiento).
+ * - Idempotentes por slug (implementado en HonorRules).
+ * - Lock pesimista para evitar carreras en shared hosting.
+ */
+final class MesaHonorController extends Controller
 {
     public function __construct(private HonorRules $rules)
     {
     }
 
-    /**
-     * Confirma asistencia (+10). Idempotente por slug.
-     */
+    /** Confirma asistencia (+10). Idempotente por slug. */
     public function confirmAttendance(Request $request, GameTable $mesa, Signup $signup): RedirectResponse
     {
-        // Política de "gestión" de la mesa (dueño/manager/admin)
         $this->authorize('manage', $mesa);
 
-        // Asegurar que el signup pertenece a la mesa (soporta mesa_id o game_table_id)
+        // Garantiza que el signup corresponda a la mesa
         $signupMesaId = (int) ($signup->getAttribute('game_table_id') ?? $signup->getAttribute('mesa_id'));
         abort_unless($signupMesaId === (int) $mesa->id, 404);
 
@@ -35,7 +37,6 @@ class MesaHonorController extends Controller
         abort_unless($auth instanceof User, 403);
 
         DB::transaction(function () use ($signup, $auth) {
-            // Releer con lock para evitar carreras
             /** @var Signup $row */
             $row = DatabaseUtils::applyPessimisticLock(
                 Signup::query()->whereKey($signup->id)
@@ -44,22 +45,19 @@ class MesaHonorController extends Controller
             if (!$row->attendance_confirmed_at) {
                 $row->attendance_confirmed_at = now();
                 $row->attendance_confirmed_by = $auth->id;
-                // limpiar marca de no-show si la hubiera
+                // limpiar no-show si lo hubiera
                 $row->no_show_at = null;
                 $row->no_show_by = null;
                 $row->save();
             }
 
-            // Asigna honor (+10) — idempotente por slug
-            $this->rules->confirmAttendance($row, $auth);
+            $this->rules->confirmAttendance($row, $auth); // +10 (idempotente)
         });
 
         return back()->with('ok', 'Asistencia confirmada y puntos asignados (+10).');
     }
 
-    /**
-     * Marca no asistencia (−20). Idempotente por slug.
-     */
+    /** Marca no asistencia (−20). Idempotente por slug. */
     public function markNoShow(Request $request, GameTable $mesa, Signup $signup): RedirectResponse
     {
         $this->authorize('manage', $mesa);
@@ -86,15 +84,17 @@ class MesaHonorController extends Controller
                 $row->save();
             }
 
-            // Asigna honor (−20) — idempotente por slug
-            $this->rules->noShow($row, $auth);
+            $this->rules->noShow($row, $auth); // −20 (idempotente)
         });
 
         return back()->with('ok', 'Marcado como no asistió (−20).');
     }
 
     /**
-     * Registra comportamiento (good => +10, bad => −10). Idempotente por (mesa, signup, tipo, manager).
+     * Registra comportamiento:
+     *   - good  => +10
+     *   - bad   => −10
+     *   - regular => no altera honor, pero los “undo” los maneja HonorRules entre transiciones.
      */
     public function behavior(Request $request, GameTable $mesa, Signup $signup): RedirectResponse
     {
@@ -111,7 +111,6 @@ class MesaHonorController extends Controller
         $auth = $request->user();
         abort_unless($auth instanceof User, 403);
 
-        // Idempotente por slug: mesa:..:signup:..:behavior:{type}:by:{manager_id}
         $this->rules->behavior($signup, $auth, $validated['type']);
 
         $msg = $validated['type'] === 'good'

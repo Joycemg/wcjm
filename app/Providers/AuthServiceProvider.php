@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers;
 
 use App\Models\User;
@@ -8,26 +10,23 @@ use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvid
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 
-class AuthServiceProvider extends ServiceProvider
+final class AuthServiceProvider extends ServiceProvider
 {
     /**
-     * Mapeo de Policies (completá según tus modelos).
+     * Policies por modelo.
      *
-     * Ejemplo:
-     * protected $policies = [
-     *     \App\Models\GameTable::class => \App\Policies\GameTablePolicy::class,
-     * ];
+     * @var array<class-string, class-string>
      */
     protected $policies = [
         \App\Models\GameTable::class => \App\Policies\GameTablePolicy::class,
-
     ];
 
     public function boot(): void
     {
         $this->registerPolicies();
 
-        $adminRoles = (array) config('auth.admin_roles', ['admin']);
+        // Config cache-friendly (cast garantizado)
+        $adminRoles = array_values((array) config('auth.admin_roles', ['admin']));
         $superAbility = (string) config('auth.super_ability', 'superadmin');
 
         $this->configureGateOverrides($adminRoles, $superAbility);
@@ -36,17 +35,22 @@ class AuthServiceProvider extends ServiceProvider
         $this->logDeniedGateDecisions();
     }
 
+    /**
+     * Superpoderes: si tenés un rol/permiso "superadmin" o sos admin, todo allow.
+     */
     private function configureGateOverrides(array $adminRoles, string $superAbility): void
     {
         Gate::before(function (?User $user) use ($adminRoles, $superAbility) {
             if (!$user) {
-                return null;
+                return null; // deja evaluar el gate normalmente
             }
 
-            if ($superAbility && $this->userHasAbility($user, $superAbility)) {
+            // Permiso/flag directo
+            if ($superAbility !== '' && $this->userHasAbility($user, $superAbility)) {
                 return true;
             }
 
+            // Roles admin
             if ($this->userIsAdmin($user, $adminRoles)) {
                 return true;
             }
@@ -79,9 +83,10 @@ class AuthServiceProvider extends ServiceProvider
                 return Response::allow();
             }
 
+            // Compatibilidad con spatie/laravel-permission u otros
             if (
-                (method_exists($user, 'can') && $user->can('manage tables'))
-                || (method_exists($user, 'hasPermissionTo') && $user->hasPermissionTo('manage tables'))
+                (method_exists($user, 'can') && $user->can('manage tables')) ||
+                (method_exists($user, 'hasPermissionTo') && $user->hasPermissionTo('manage tables'))
             ) {
                 return Response::allow();
             }
@@ -90,6 +95,10 @@ class AuthServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * Log de gates denegados sólo en dev/test.
+     * Útil para depurar sin “ensuciar” logs de producción/hosting compartido.
+     */
     private function logDeniedGateDecisions(): void
     {
         if (!app()->environment(['local', 'testing'])) {
@@ -110,12 +119,12 @@ class AuthServiceProvider extends ServiceProvider
         });
     }
 
+    /** Detecta si el usuario es admin según múltiples fuentes (roles/propiedad). */
     private function userIsAdmin(User $user, array $adminRoles): bool
     {
         if (method_exists($user, 'hasAnyRole') && $user->hasAnyRole($adminRoles)) {
             return true;
         }
-
         if (method_exists($user, 'hasRole')) {
             foreach ($adminRoles as $role) {
                 if ($user->hasRole($role)) {
@@ -127,15 +136,17 @@ class AuthServiceProvider extends ServiceProvider
         return isset($user->role) && in_array($user->role, $adminRoles, true);
     }
 
+    /** Chequeo flexible de “súper habilidad” (permiso o flag booleano). */
     private function userHasAbility(User $user, string $superAbility): bool
     {
-        if (method_exists($user, 'hasPermissionTo') && $user->hasPermissionTo($superAbility)) {
+        if ($superAbility !== '' && method_exists($user, 'hasPermissionTo') && $user->hasPermissionTo($superAbility)) {
             return true;
         }
 
+        // Flags comunes
         return (
-            (property_exists($user, 'is_superadmin') && $user->is_superadmin)
-            || (isset($user->is_superadmin) && (bool) $user->is_superadmin)
+            (property_exists($user, 'is_superadmin') && $user->is_superadmin) ||
+            (isset($user->is_superadmin) && (bool) $user->is_superadmin)
         );
     }
 }

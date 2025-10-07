@@ -1,22 +1,49 @@
 {{-- resources/views/mesas/create.blade.php --}}
 @extends('layouts.app')
+
 @section('title', __('Nueva mesa') . ' · ' . config('app.name', 'La Taberna'))
+
+@push('head')
+    <style>
+        :root {
+            --muted: #6b7280;
+            --maroon: #7b2d26;
+            --border: #e5e7eb
+        }
+
+        .muted {
+            color: var(--muted)
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: .75rem;
+            padding: 1rem
+        }
+
+        .btn {
+            display: inline-flex;
+            gap: .5rem;
+            align-items: center;
+            border: 1px solid var(--border);
+            border-radius: .6rem;
+            padding: .5rem .9rem
+        }
+
+        .btn.ok {
+            background: #dcfce7;
+            border-color: #22c55e
+        }
+    </style>
+@endpush
 
 @section('content')
     @php
-        use Carbon\Carbon;
-
-        // Zona horaria visible (puede ser app.display_timezone o app.timezone)
-        $tz = config('app.display_timezone', config('app.timezone'));
-
-        /** Valor por defecto para <input type="datetime-local">
-         *  - Si hay old('opens_at') -> se respeta
-         *  - Si no hay, se propone HOY 22:15
-         */
+        $tz = config('app.display_timezone', config('app.timezone', 'UTC'));
         $opensAtObj = filled(old('opens_at'))
-            ? Carbon::parse(old('opens_at'), $tz)
-            : Carbon::now($tz)->setTime(22, 15)->second(0);
-
+            ? \Carbon\Carbon::parse(old('opens_at'), $tz)
+            : \Carbon\Carbon::now($tz)->setTime(22, 15, 0);
         $opensAtValue = $opensAtObj->format('Y-m-d\TH:i');
         $managerCandidates = collect($managerCandidates ?? []);
     @endphp
@@ -24,15 +51,12 @@
     <div class="card">
         <h2 style="color:var(--maroon);margin-top:0">{{ __('Nueva mesa') }}</h2>
 
-        {{-- Errores de validación --}}
         @if ($errors->any())
             <div role="alert"
                  style="margin:1rem 0;padding:.75rem;border:1px solid #f87171;border-radius:.5rem;background:#fff5f5;color:#7f1d1d">
                 <strong style="display:block;margin-bottom:.25rem">{{ __('Revisá los campos:') }}</strong>
                 <ul style="margin:0;padding-left:1rem">
-                    @foreach ($errors->all() as $err)
-                        <li>{{ $err }}</li>
-                    @endforeach
+                    @foreach ($errors->all() as $err) <li>{{ $err }}</li> @endforeach
                 </ul>
             </div>
         @endif
@@ -111,7 +135,7 @@
                 @error('description') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Link para unirse / manual --}}
+            {{-- Link --}}
             <div>
                 <label for="join_url">{{ __('Enlace para la mesa (opcional)') }}</label>
                 <input id="join_url"
@@ -129,7 +153,7 @@
                 @error('join_url') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Encargado / dueño de mesa --}}
+            {{-- Encargado --}}
             <div>
                 <label for="manager_id">{{ __('Encargado de la mesa (opcional)') }}</label>
                 <input id="manager_id"
@@ -145,17 +169,13 @@
                            aria-invalid="true"
                        @enderror>
                 <small id="manager_help"
-                       class="muted">{{ __('Ingresá el ID del encargado o elegilo de la lista (toma los últimos usuarios activos).') }}</small>
+                       class="muted">{{ __('Ingresá el ID o elegilo de la lista.') }}</small>
                 @error('manager_id') <div class="text-danger">{{ $message }}</div> @enderror
 
                 <datalist id="manager-candidates">
                     @foreach($managerCandidates as $candidate)
                         @php
-                            $label = trim(collect([
-                                $candidate->name,
-                                $candidate->username ? '@' . $candidate->username : null,
-                                $candidate->email,
-                            ])->filter()->implode(' · '));
+                            $label = trim(collect([$candidate->name, $candidate->username ? '@' . $candidate->username : null, $candidate->email])->filter()->implode(' · '));
                             $label = $label !== '' ? $label : 'ID ' . $candidate->id;
                         @endphp
                         <option value="{{ $candidate->id }}"
@@ -164,9 +184,9 @@
                 </datalist>
             </div>
 
-            {{-- Nota privada para el encargado --}}
+            {{-- Nota privada --}}
             <div style="grid-column:1/-1">
-                <label for="manager_note">{{ __('Nota interna para el encargado (opcional)') }}</label>
+                <label for="manager_note">{{ __('Nota interna (opcional)') }}</label>
                 <textarea id="manager_note"
                           name="manager_note"
                           rows="3"
@@ -180,7 +200,7 @@
                 @error('manager_note') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Imagen (preview al seleccionar) --}}
+            {{-- Imagen --}}
             <div>
                 <label for="image">{{ __('Imagen (opcional)') }}</label>
                 <input id="image"
@@ -192,9 +212,7 @@
                            aria-invalid="true"
                        @enderror>
                 <small id="image_help"
-                       class="muted">
-                    {{ __('Usá JPG/PNG/WebP. Tamaño máx. 2MB. Recomendado 16:9 (p. ej. 1280×720).') }}
-                </small>
+                       class="muted">{{ __('JPG/PNG/WebP, máx. 2MB, 16:9 recomendado.') }}</small>
                 <div id="image_note"
                      class="muted"
                      style="font-size:.85rem;margin-top:.25rem"></div>
@@ -203,13 +221,15 @@
                      style="margin-top:.5rem;display:none">
                     <img id="image-preview"
                          alt="{{ __('Vista previa') }}"
-                         style="display:block;max-width:220px;height:auto;border-radius:.5rem;object-fit:cover">
+                         style="display:block;max-width:220px;height:auto;border-radius:.5rem;object-fit:cover"
+                         width="220"
+                         height="124">
                 </div>
 
                 @error('image') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Apertura manual --}}
+            {{-- Estado --}}
             <div>
                 <input type="hidden"
                        name="is_open"
@@ -223,12 +243,11 @@
                            {{ old('is_open') ? 'checked' : '' }}>
                     <span>{{ __('Abrir manualmente ya') }}</span>
                 </label>
-                <small
-                       class="muted">{{ __('Si además programás una apertura futura, quedará lista para autoabrir a esa hora.') }}</small>
+                <small class="muted">{{ __('Si programás apertura futura, autoabrirá a esa hora.') }}</small>
                 @error('is_open') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Apertura programada (default: hoy 22:15) --}}
+            {{-- Apertura programada --}}
             <div>
                 <label for="opens_at">{{ __('Apertura programada (opcional)') }}</label>
                 <input id="opens_at"
@@ -241,9 +260,7 @@
                            aria-invalid="true"
                        @enderror>
                 <small id="opens_help"
-                       class="muted">
-                    {{ __('Por defecto proponemos HOY a las 22:15 en el año actual (:tz). Podés cambiarlo o dejarlo vacío.', ['tz' => $tz]) }}
-                </small>
+                       class="muted">{{ __('Proponemos HOY 22:15 (:tz).', ['tz' => $tz]) }}</small>
                 <div id="opens_hint"
                      class="muted"
                      style="font-size:.85rem"></div>
@@ -262,7 +279,7 @@
                 @error('opens_at') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Botones --}}
+            {{-- Acciones --}}
             <div style="grid-column:1/-1;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
                 <button class="btn ok"
                         id="btn-submit"
@@ -280,106 +297,48 @@
             (() => {
                 const $ = (id) => document.getElementById(id);
 
-                // ==== Contadores accesibles ====
+                // Contadores
                 const bindCounter = (input, outId) => {
-                    const out = $(outId);
-                    if (!input || !out) return;
+                    const out = $(outId); if (!input || !out) return;
                     const max = Number(input.getAttribute('maxlength') || '0') || null;
-                    const update = () => {
-                        const len = (input.value || '').length;
-                        out.textContent = max ? `${len}/${max}` : `${len}`;
-                    };
-                    input.addEventListener('input', update, { passive: true });
-                    update();
+                    const update = () => { const len = (input.value || '').length; out.textContent = max ? `${len}/${max}` : `${len}`; };
+                    input.addEventListener('input', update, { passive: true }); update();
                 };
                 bindCounter($('title'), 'title_count');
                 bindCounter($('description'), 'description_count');
 
-                // ==== Imagen: validación tamaño (2MB) + preview ====
+                // Imagen 2MB + preview
                 const MAX_BYTES = 2 * 1024 * 1024;
-                const inputImage = $('image');
-                const noteImage = $('image_note');
-                const prevWrap = $('image-preview-wrap');
-                const prevImg = $('image-preview');
-
+                const inputImage = $('image'), noteImage = $('image_note'), prevWrap = $('image-preview-wrap'), prevImg = $('image-preview');
                 inputImage?.addEventListener('change', (e) => {
                     const f = e.target.files?.[0];
-                    if (!f) {
-                        inputImage.setCustomValidity('');
-                        if (noteImage) noteImage.textContent = '';
-                        if (prevWrap) prevWrap.style.display = 'none';
-                        return;
-                    }
-                    if (f.size > MAX_BYTES) {
-                        inputImage.setCustomValidity(@json(__('La imagen supera 2 MB.')));
-                        if (noteImage) noteImage.textContent = @json(__('Archivo demasiado grande (máx. 2 MB).'));
-                    } else {
-                        inputImage.setCustomValidity('');
-                        if (noteImage) noteImage.textContent = '';
-                    }
-
+                    if (!f) { inputImage.setCustomValidity(''); if (noteImage) noteImage.textContent = ''; if (prevWrap) prevWrap.style.display = 'none'; return; }
+                    if (f.size > MAX_BYTES) { inputImage.setCustomValidity(@json(__('La imagen supera 2 MB.'))); if (noteImage) noteImage.textContent = @json(__('Archivo demasiado grande (máx. 2 MB).')); }
+                    else { inputImage.setCustomValidity(''); if (noteImage) noteImage.textContent = ''; }
                     if (/^image\//.test(f.type) && prevWrap && prevImg) {
                         const url = URL.createObjectURL(f);
-                        prevImg.src = url;
+                        prevImg.src = url; prevImg.width = 220; prevImg.height = 124;
                         prevWrap.style.display = 'block';
                         inputImage.addEventListener('formdata', () => URL.revokeObjectURL(url), { once: true });
                     }
-                }, { passive: false });
+                });
 
-                // ==== Apertura programada: atajos usando hora del servidor ====
-                const opens = $('opens_at');
-                const tzHint = $('opens_hint');
+                // Apertura programada helpers
+                const opens = $('opens_at'), tzHint = $('opens_hint');
                 const pad = (n) => String(n).padStart(2, '0');
                 const toLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                const nowFromServer = () => (typeof window.mesasNowMs === 'function') ? new Date(window.mesasNowMs()) : new Date();
 
-                const nowFromServer = () => {
-                    const ms = (typeof window.mesasNowMs === 'function') ? window.mesasNowMs() : Date.now();
-                    return new Date(ms);
-                };
+                $('btn-2215-today')?.addEventListener('click', () => { const d = nowFromServer(); d.setHours(22, 15, 0, 0); opens.value = toLocal(d); announce(); }, { passive: true });
+                $('btn-now-opens')?.addEventListener('click', () => { const d = nowFromServer(); d.setSeconds(0, 0); opens.value = toLocal(d); announce(); }, { passive: true });
+                $('btn-clear-opens')?.addEventListener('click', () => { opens.value = ''; announce(); }, { passive: true });
 
-                const setToday2215 = () => {
-                    const d = nowFromServer();
-                    d.setHours(22, 15, 0, 0);
-                    opens.value = toLocal(d);
-                    announceOpens();
-                };
-                const setNow = () => {
-                    const d = nowFromServer();
-                    d.setSeconds(0, 0);
-                    opens.value = toLocal(d);
-                    announceOpens();
-                };
-                const clearOpens = () => { opens.value = ''; announceOpens(); };
+                function announce() { if (!tzHint) return; if (!opens.value) { tzHint.textContent = ''; return; } try { const d = new Date(opens.value); tzHint.textContent = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); } catch { tzHint.textContent = ''; } }
+                announce();
 
-                $('btn-2215-today')?.addEventListener('click', setToday2215, { passive: true });
-                $('btn-now-opens')?.addEventListener('click', setNow, { passive: true });
-                $('btn-clear-opens')?.addEventListener('click', clearOpens, { passive: true });
-
-                function announceOpens() {
-                    if (!tzHint) return;
-                    if (!opens.value) { tzHint.textContent = ''; return; }
-                    try {
-                        const d = new Date(opens.value);
-                        tzHint.textContent = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-                    } catch (_) { tzHint.textContent = ''; }
-                }
-                announceOpens();
-
-                // Si quedó vacío (p.ej. por validación), reponer default HOY 22:15
-                if (opens && !opens.value) {
-                    setToday2215();
-                }
-
-                // ==== Anti doble submit ====
-                const form = document.getElementById('mesa-create-form');
-                const submitBtn = document.getElementById('btn-submit');
-                form?.addEventListener('submit', () => {
-                    if (submitBtn) {
-                        submitBtn.disabled = true;
-                        submitBtn.setAttribute('aria-disabled', 'true');
-                        submitBtn.textContent = @json(__('Creando…'));
-                    }
-                });
+                // Anti doble submit
+                const form = $('mesa-create-form'), submitBtn = $('btn-submit');
+                form?.addEventListener('submit', () => { if (submitBtn) { submitBtn.disabled = true; submitBtn.setAttribute('aria-disabled', 'true'); submitBtn.textContent = @json(__('Creando…')); } });
             })();
         </script>
     @endonce

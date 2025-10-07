@@ -1,6 +1,5 @@
 <?php declare(strict_types=1);
 
-use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,25 +7,36 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        $schema = Schema::connection($this->getConnection());
+        Schema::create('honor_events', function (Blueprint $table) {
+            $table->id();
 
-        if ($schema->hasTable('honor_events')) {
-            return;
-        }
+            // Relación con usuario
+            $table->foreignId('user_id')
+                ->constrained('users')
+                ->cascadeOnUpdate()
+                ->cascadeOnDelete();
 
-        $schema->create('honor_events', function (Blueprint $t) {
-            $t->id();
-            $t->foreignIdFor(User::class)->constrained()->cascadeOnDelete();
-            $t->integer('points');
-            $t->string('reason')->nullable();
-            $t->json('meta')->nullable();
-            // Longitud 191 => compatible con índices UNIQUE en MySQL/MariaDB utf8mb4
-            // sin depender de Schema::defaultStringLength().
-            $t->string('slug', 191)->nullable(); // idempotencia por acción (único por user)
-            $t->timestamps();
+            // Puntos del evento (+ o -)
+            $table->integer('points')->default(0);
 
-            $t->index('user_id');
-            $t->unique(['user_id', 'slug']);
+            // Motivo estándar o personalizado (ej: "attendance:confirmed")
+            $table->string('reason', 64)->index();
+
+            // Metadatos arbitrarios (JSON liviano)
+            $table->json('meta')->nullable();
+
+            // Slug único (idempotencia)
+            $table->string('slug', 120)->nullable();
+
+            // Índice único compuesto (usuario + slug)
+            $table->unique(['user_id', 'slug']);
+
+            // Campos de timestamp
+            $table->timestampsTz(precision: 0);
+
+            // === Futuras extensiones (opcional) ===
+            // $table->timestampTz('expires_at')->nullable()->index();
+            // $table->string('source', 64)->nullable()->index();
         });
     }
 

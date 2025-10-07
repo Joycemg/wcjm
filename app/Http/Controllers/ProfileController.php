@@ -12,12 +12,17 @@ use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
 
-class ProfileController extends Controller
+/**
+ * Edición de perfil optimizada para hosting compartido.
+ * - Validación estricta, sanitización y SSRF-guards al importar avatar por URL.
+ * - No introduce dependencias pesadas (GD/Imagick no requeridos).
+ */
+final class ProfileController extends Controller
 {
-    /** Reglas del avatar (pensadas para hosting compartido) */
-    private const AVATAR_MIN_SIDE = 128;     // px
-    private const AVATAR_MAX_SIDE = 4096;    // px
-    private const AVATAR_MAX_KB = 4096;    // 4 MB
+    /** Reglas del avatar */
+    private const AVATAR_MIN_SIDE = 128;          // px
+    private const AVATAR_MAX_SIDE = 4096;         // px
+    private const AVATAR_MAX_KB = 4096;         // 4 MB
     private const AVATAR_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
     private const AVATAR_EXTS = ['jpeg', 'jpg', 'png', 'webp', 'avif'];
 
@@ -28,16 +33,15 @@ class ProfileController extends Controller
 
     public function edit(Request $request): ViewContract
     {
-        $auth = $this->requireUser($request);
-        return view('profile.edit', ['user' => $auth]);
+        return view('profile.edit', ['user' => $this->requireUser($request)]);
     }
 
-    /** Actualiza MI perfil (nombre, username, bio y avatar) */
+    /** Actualiza MI perfil (nombre, username, bio y avatar). */
     public function update(Request $request): RedirectResponse
     {
         $user = $this->requireUser($request);
 
-        // --- Normalizaciones previas ---
+        // ---- Normalizaciones previas ----
         $usernameInput = $this->normalizeUsername($request->input('username'));
         $bioInput = $this->sanitizeBio($request->input('bio'));
 
@@ -47,10 +51,11 @@ class ProfileController extends Controller
                 ?: $request->input('name')
                 ?: (str_contains((string) $user->email, '@') ? Str::before((string) $user->email, '@') : null)
                 ?: ('user' . $user->id);
+
             $usernameInput = $this->generateUsername((string) $rawBase, (int) $user->id);
         }
 
-        // --- Validación (incluye avatar_url) ---
+        // ---- Validación (incluye avatar_url) ----
         $reserved = $this->reservedUsernames();
         /** @var UploadedFile|null $avatarFile */
         $avatarFile = $request->file('avatar');
@@ -84,13 +89,7 @@ class ProfileController extends Controller
                     'mimes:' . implode(',', self::AVATAR_EXTS),
                     'max:' . self::AVATAR_MAX_KB, // KB
                 ],
-                'avatar_url' => [
-                    'nullable',
-                    'string',
-                    'max:2048',
-                    'url',
-                    'starts_with:https://,http://',
-                ],
+                'avatar_url' => ['nullable', 'string', 'max:2048', 'url', 'starts_with:https://,http://'],
                 'remove_avatar' => ['boolean'],
             ],
             [
@@ -104,7 +103,7 @@ class ProfileController extends Controller
             ]
         );
 
-        // Validaciones extra (MIME real + dimensiones) solo para upload de archivo
+        // Validaciones extra (MIME real + dimensiones) sólo para file upload
         $validator->after(function ($v) use ($avatarFile) {
             if (!$avatarFile)
                 return;
@@ -133,12 +132,12 @@ class ProfileController extends Controller
 
         $data = $validator->validate();
 
-        // --- Manejo de avatar (remove / upload / URL) ---
+        // ---- Manejo de avatar (remove / upload / URL) ----
         if (!empty($data['remove_avatar'])) {
             $this->deleteAvatarIfAny($user);
             $user->avatar_path = null;
 
-        } elseif ($avatarFile) {
+        } elseif ($avatarFile instanceof UploadedFile) {
             // Subida directa
             $newPath = $this->storeAvatar((int) $user->id, $avatarFile);
             if ($newPath !== '') {
@@ -149,48 +148,49 @@ class ProfileController extends Controller
         } elseif (!empty($data['avatar_url']) && (bool) config('users.allow_remote_avatar', true)) {
             // Desde URL (solo si NO hubo archivo)
             try {
-                // Chequeo preliminar de tamaño por Content-Length (si existe)
                 $this->assertRemoteFileSize($data['avatar_url'], self::AVATAR_MAX_KB * 1024);
 
                 $tmpUploaded = $this->downloadRemoteImageAsUploadedFile($data['avatar_url']);
+
+                // Validar dimensiones/MIME del archivo temporal igual que upload
+                try {
+                    if (class_exists(\finfo::class)) {
+                        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+                        $mime = (string) ($finfo->file($tmpUploaded->getPathname()) ?: '');
+                        if (!in_array($mime, self::AVATAR_MIMES, true)) {
+                            @unlink($tmpUploaded->getPathname());
+                            return back()->withErrors(['avatar_url' => 'El link no apunta a una imagen válida.'])->withInput();
+                        }
+                    }
+                    [$w, $h] = @getimagesize($tmpUploaded->getPathname()) ?: [0, 0];
+                    if ($w < self::AVATAR_MIN_SIDE || $h < self::AVATAR_MIN_SIDE) {
+                        @unlink($tmpUploaded->getPathname());
+                        return back()->withErrors(['avatar_url' => 'La imagen del link es demasiado pequeña.'])->withInput();
+                    }
+                    if ($w > self::AVATAR_MAX_SIDE || $h > self::AVATAR_MAX_SIDE) {
+                        @unlink($tmpUploaded->getPathname());
+                        return back()->withErrors(['avatar_url' => 'La imagen del link excede el tamaño máximo permitido.'])->withInput();
+                    }
+                } catch (\Throwable) {
+                    @unlink($tmpUploaded->getPathname());
+                    return back()->withErrors(['avatar_url' => 'No se pudo procesar la imagen del link.'])->withInput();
+                }
+
+                // Guardar definitivamente
+                $newPath = $this->storeAvatar((int) $user->id, $tmpUploaded);
+                @unlink($tmpUploaded->getPathname()); // limpiar tmp
+
+                if ($newPath !== '') {
+                    $this->deleteAvatarIfAny($user);
+                    $user->avatar_path = $newPath;
+                }
+
             } catch (\Throwable $e) {
                 return back()->withErrors(['avatar_url' => $e->getMessage()])->withInput();
             }
-
-            // Validar dimensiones/MIME del archivo temporal igual que upload
-            try {
-                if (class_exists(\finfo::class)) {
-                    $finfo = new \finfo(FILEINFO_MIME_TYPE);
-                    $mime = (string) ($finfo->file($tmpUploaded->getPathname()) ?: '');
-                    if (!in_array($mime, self::AVATAR_MIMES, true)) {
-                        @unlink($tmpUploaded->getPathname());
-                        return back()->withErrors(['avatar_url' => 'El link no apunta a una imagen válida.'])->withInput();
-                    }
-                }
-                [$w, $h] = @getimagesize($tmpUploaded->getPathname()) ?: [0, 0];
-                if ($w < self::AVATAR_MIN_SIDE || $h < self::AVATAR_MIN_SIDE) {
-                    @unlink($tmpUploaded->getPathname());
-                    return back()->withErrors(['avatar_url' => 'La imagen del link es demasiado pequeña.'])->withInput();
-                }
-                if ($w > self::AVATAR_MAX_SIDE || $h > self::AVATAR_MAX_SIDE) {
-                    @unlink($tmpUploaded->getPathname());
-                    return back()->withErrors(['avatar_url' => 'La imagen del link excede el tamaño máximo permitido.'])->withInput();
-                }
-            } catch (\Throwable) {
-                @unlink($tmpUploaded->getPathname());
-                return back()->withErrors(['avatar_url' => 'No se pudo procesar la imagen del link.'])->withInput();
-            }
-
-            // Guardar definitivamente
-            $newPath = $this->storeAvatar((int) $user->id, $tmpUploaded);
-            @unlink($tmpUploaded->getPathname()); // limpiar tmp
-            if ($newPath !== '') {
-                $this->deleteAvatarIfAny($user);
-                $user->avatar_path = $newPath;
-            }
         }
 
-        // --- Guardar cambios solo si hay modificaciones ---
+        // ---- Guardar cambios sólo si hay modificaciones ----
         $user->fill([
             'name' => $data['name'],
             'username' => $data['username'] ?? null,
@@ -204,9 +204,7 @@ class ProfileController extends Controller
         return redirect()->route('profile.edit')->with('ok', 'Perfil actualizado');
     }
 
-    /* =========================
-     * Helpers privados
-     * ========================= */
+    /* ========================= Helpers privados ========================= */
 
     private function avatarDisk(): string
     {
@@ -252,12 +250,15 @@ class ProfileController extends Controller
         try {
             $disk = $this->avatarDisk();
             Storage::disk($disk)->delete($path);
+
+            // Borrar posibles thumbnails
             $ext = pathinfo($path, PATHINFO_EXTENSION);
             $base = substr($path, 0, -(strlen($ext) + 1));
             foreach ((array) config('users.avatar_thumb_sizes', [512, 256, 128]) as $w) {
                 Storage::disk($disk)->delete("{$base}_w{$w}.{$ext}");
             }
-        } catch (\Throwable) { /* no romper en hosting compartido */
+        } catch (\Throwable) {
+            // no romper en hosting compartido
         }
     }
 
@@ -271,8 +272,9 @@ class ProfileController extends Controller
             ?? $this->normalizeUsername('user' . $ignoreUserId)
             ?? 'user';
 
-        if (Str::length($base) < 3)
+        if (Str::length($base) < 3) {
             $base = str_pad($base, 3, '0');
+        }
 
         $isValid = function (string $c) use ($reserved): bool {
             if ($c === '' || strlen($c) < 3)
@@ -322,12 +324,14 @@ class ProfileController extends Controller
     {
         if ($value === null)
             return null;
+
         $u = Str::of($value)->trim()->lower();
         $u = Str::of(Str::ascii($u));
         $u = $u->replaceMatches('/\s+/', '_')
             ->replaceMatches('/[^a-z0-9._-]/', '')
             ->replaceMatches('/([._-])\1+/', '$1')
             ->replaceMatches('/^[._-]+|[._-]+$/', '');
+
         $u = (string) $u;
         return $u === '' ? null : $u;
     }
@@ -387,10 +391,9 @@ class ProfileController extends Controller
         return $cache = array_values(array_unique($merged));
     }
 
-    /* ====== Helpers para avatar por URL (optimizados para hosting compartido) ====== */
+    /* ====== Helpers para avatar por URL (SSRF/size/streaming) ====== */
 
     /** Lanza si Content-Length > $maxBytes (si el header existe). No descarga el cuerpo. */
-    // Reemplazá tu método por este
     private function assertRemoteFileSize(string $url, int $maxBytes): void
     {
         $url = trim($url);
@@ -398,23 +401,19 @@ class ProfileController extends Controller
             throw new \RuntimeException('El link no es permitido.');
         }
 
-        // Si get_headers no está disponible o está deshabilitado, seguimos sin chequear (lo validaremos al descargar)
         if (!function_exists('get_headers')) {
-            return;
+            return; // Validaremos durante la descarga
         }
 
-        // FIX: segundo parámetro como bool (PHP 8+) en lugar de 1
+        // PHP 8+: segundo parámetro bool
         $headers = @get_headers($url, true);
-        if ($headers === false) {
-            return; // sin headers → validaremos durante la descarga por stream/cURL
-        }
+        if ($headers === false)
+            return;
 
-        // Normalizar a mapa en minúsculas (ignorando líneas de estado)
         $map = [];
         foreach ($headers as $k => $v) {
-            if (is_int($k)) {
+            if (is_int($k))
                 continue;
-            }
             $map[strtolower((string) $k)] = $v;
         }
 
@@ -427,8 +426,7 @@ class ProfileController extends Controller
         }
     }
 
-
-    /** Descarga segura de imagen remota a archivo temporal y devuelve UploadedFile listo para store() */
+    /** Descarga segura de imagen remota a archivo temporal y retorna UploadedFile listo para store() */
     private function downloadRemoteImageAsUploadedFile(string $url): UploadedFile
     {
         $url = trim($url);
@@ -448,7 +446,6 @@ class ProfileController extends Controller
             throw new \RuntimeException('No se pudo descargar la imagen del link.');
         }
 
-        // MIME real → nombre original y extensión
         $mime = 'application/octet-stream';
         if (class_exists(\finfo::class)) {
             $finfo = new \finfo(FILEINFO_MIME_TYPE);
@@ -462,14 +459,14 @@ class ProfileController extends Controller
         $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'image/avif' => 'avif'];
         $ext = $extMap[$mime] ?? 'jpg';
 
-        // UploadedFile de test (no moverá el archivo al final)
+        // UploadedFile “de test” (el archivo se queda donde está)
         return new UploadedFile($tmp, 'remote_avatar.' . $ext, $mime, null, true);
     }
 
-    /** Intenta descargar por cURL y si no, por stream (fopen). Limita por tamaño. */
+    /** Intenta descargar por cURL y si no, por streams. Limita por tamaño. */
     private function streamDownload(string $url, string $destPath, int $maxBytes): bool
     {
-        // 1) cURL si está disponible (común en Hostinger)
+        // 1) cURL
         if (function_exists('curl_init')) {
             $fh = @fopen($destPath, 'wb');
             if (!$fh)
@@ -488,7 +485,7 @@ class ProfileController extends Controller
                     $len = strlen($data);
                     $read += $len;
                     if ($read > $maxBytes)
-                        return 0; // aborta
+                        return 0; // corta
                     return fwrite($fh, $data);
                 },
             ]);
@@ -504,54 +501,49 @@ class ProfileController extends Controller
             return true;
         }
 
-        // 2) Streams (allow_url_fopen debe estar habilitado)
-        $read = 0;
-        $chunk = 64 * 1024;
-        $ctx = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'timeout' => 20,
-                'follow_location' => 1,
-                'max_redirects' => 3,
-                'header' => "User-Agent: AvatarFetcher/1.0\r\n",
-            ],
-            'ssl' => [
-                'verify_peer' => true,
-                'verify_peer_name' => true,
-            ],
-        ]);
-
-        $in = @fopen($url, 'rb', false, $ctx);
-        $out = @fopen($destPath, 'wb');
-        if (!$in || !$out) {
-            @is_resource($in) && fclose($in);
-            @is_resource($out) && fclose($out);
-            return false;
-        }
-
+        // 2) Streams (allow_url_fopen debe estar on)
+        $in = null;
+        $out = null;
         try {
+            $read = 0;
+            $chunk = 64 * 1024;
+            $ctx = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'timeout' => 20,
+                    'follow_location' => 1,
+                    'max_redirects' => 3,
+                    'header' => "User-Agent: AvatarFetcher/1.0\r\n",
+                ],
+                'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+            ]);
+
+            $in = @fopen($url, 'rb', false, $ctx);
+            $out = @fopen($destPath, 'wb');
+            if (!$in || !$out)
+                return false;
+
             while (!feof($in)) {
                 $buf = fread($in, $chunk);
-                if ($buf === false) {
+                if ($buf === false)
                     return false;
-                }
                 $read += strlen($buf);
-                if ($read > $maxBytes) {
+                if ($read > $maxBytes)
                     return false;
-                }
-                if (fwrite($out, $buf) === false) {
+                if (fwrite($out, $buf) === false)
                     return false;
-                }
             }
         } finally {
-            fclose($in);
-            fclose($out);
+            if (is_resource($in))
+                fclose($in);
+            if (is_resource($out))
+                fclose($out);
         }
 
         return true;
     }
 
-    /** Guardas anti-SSRF básicas (http/https, sin localhost/IP privada) */
+    /** Guardas anti-SSRF básicas (http/https, sin localhost/IP privada/reservada). */
     private function isUrlAllowed(string $url): bool
     {
         $p = @parse_url($url);
@@ -566,12 +558,12 @@ class ProfileController extends Controller
         if (in_array($host, ['localhost', '127.0.0.1', '::1'], true))
             return false;
 
-        // Si es IP literal, bloquea privadas/reservadas
+        // IP literal → bloquear privadas/reservadas
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             return (bool) filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
         }
 
-        // Resolver A (básico) y bloquear privadas
+        // Resolver A y bloquear privadas/reservadas
         $ips = @gethostbynamel($host) ?: [];
         foreach ($ips as $ip) {
             if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {

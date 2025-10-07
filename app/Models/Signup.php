@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use Carbon\Carbon;
-use Carbon\CarbonInterface;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -13,48 +11,65 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 
 /**
- * Signup (inscripción a mesa)
- * - Optimizado para hosting compartido: evita N+1 y hace queries minimalistas.
- * - Compatible con los campos usados por MesaHonorController (confirm/no-show).
+ * Modelo: Signup (inscripción a mesa)
+ * - Optimizado para hosting compartido (queries minimalistas, sin features DB exóticas).
+ * - Compatible con MesaHonorController (confirm/no-show).
  *
- * @property-read int|null $position
- * @property-read bool|null $is_player
- * @property-read bool|null $is_waitlist
- * @property-read string $user_avatar_url
- * @property-read string|null $created_ago
- * @property-read string|null $user_display_name
+ * @property int $id
+ * @property int $game_table_id
+ * @property int $user_id
+ * @property bool $is_counted
+ * @property bool $is_manager
+ * @property bool|null $attended                 // derivado de attended | attendance_confirmed_at | no_show_at
+ * @property string|null $behavior               // 'good'|'regular'|'bad'|null
+ *
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $attendance_confirmed_at
+ * @property int|null $attendance_confirmed_by
+ * @property \Illuminate\Support\Carbon|null $no_show_at
+ * @property int|null $no_show_by
+ *
+ * ==== Accessors computados (viajan en JSON) ====
+ * @property-read int|null $position             // 1-based entre contados
+ * @property-read bool|null $is_player           // dentro de capacidad
+ * @property-read bool|null $is_waitlist         // fuera de capacidad
+ * @property-read string $user_avatar_url        // cascada avatar
+ * @property-read string|null $created_ago       // "hace 5 min"
+ * @property-read string|null $user_display_name // name|username|local-part
+ *
+ * @mixin \Eloquent
  */
 class Signup extends Model
 {
     use HasFactory;
 
-    /**
-     * Cache simple por instancia para la capacidad de la mesa.
-     * Evita repetir consultas cuando se calculan varios atributos derivados.
-     */
-    private ?int $memoTableCapacity = null;
+    /** Valores válidos para behavior */
+    public const BEHAV_GOOD = 'good';
+    public const BEHAV_REGULAR = 'regular';
+    public const BEHAV_BAD = 'bad';
 
-    /** Identificador de mesa asociado al cache de capacidad. */
-    private ?int $memoCapacityTableId = null;
-    /** Columnas asignables */
+    /** @var array<int,string> */
     protected $fillable = [
         'game_table_id',
         'user_id',
         'is_counted',
         'is_manager',
-        'attended',
+        'attended', // opcional si tenés columna booleana
         'behavior',
 
-        // soportadas por MesaHonorController:
+        // compatibles con MesaHonorController:
         'attendance_confirmed_at',
         'attendance_confirmed_by',
         'no_show_at',
         'no_show_by',
     ];
 
-    /** Atributos computados que viajan en JSON */
+    /** Viajan en JSON para UI */
+    /** @var array<int,string> */
     protected $appends = [
         'position',
         'is_player',
@@ -64,68 +79,53 @@ class Signup extends Model
         'user_display_name',
     ];
 
-    /** Casts (usa datetime mutable para diffs humanos habituales) */
+    /** Tipos/casts simples y sin features raras de DB */
+    /** @var array<string,string> */
     protected $casts = [
         'id' => 'integer',
         'game_table_id' => 'integer',
         'user_id' => 'integer',
         'is_counted' => 'boolean',
         'is_manager' => 'boolean',
-        'attended' => 'boolean',
+        'attended' => 'boolean', // si existe la columna real
         'behavior' => 'string',
 
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
 
         'attendance_confirmed_at' => 'datetime',
-        'no_show_at' => 'datetime',
         'attendance_confirmed_by' => 'integer',
+        'no_show_at' => 'datetime',
         'no_show_by' => 'integer',
     ];
 
-    public function getAttendedAttribute($value): ?bool
-    {
-        if (array_key_exists('attended', $this->getAttributes())) {
-            return $value === null ? null : (bool) $value;
-        }
-
-        $confirmed = $this->getAttributes()['attendance_confirmed_at'] ?? null;
-        if ($confirmed !== null) {
-            return true;
-        }
-
-        $noShow = $this->getAttributes()['no_show_at'] ?? null;
-        if ($noShow !== null) {
-            return false;
-        }
-
-        return null;
-    }
-
-    /** Tocar la mesa al cambiar un signup (para ordenar por actividad) */
+    /** Tocar mesa en cambios (para orden por actividad sin triggers) */
     protected $touches = ['gameTable'];
+
+    /** Cache simple de capacidad por instancia */
+    private ?int $memoTableCapacity = null;
+    private ?int $memoCapacityTableId = null;
 
     /* =========================
      * Relaciones
      * ========================= */
 
-    /** @return BelongsTo<GameTable, Signup> */
+    /** @return BelongsTo<GameTable,Signup> */
     public function gameTable(): BelongsTo
     {
         return $this->belongsTo(GameTable::class, 'game_table_id');
     }
 
-    /** @return BelongsTo<User, Signup> */
+    /** @return BelongsTo<User,Signup> */
     public function user(): BelongsTo
     {
-        // withDefault evita nulls en vistas y accessors
-        return $this->belongsTo(User::class)
-            ->withDefault([
-                'name' => null,
-                'username' => null,
-                'email' => null,
-                'avatar_path' => null,
-            ]);
+        // withDefault evita nulls en blades/accessors
+        return $this->belongsTo(User::class)->withDefault([
+            'name' => null,
+            'username' => null,
+            'email' => null,
+            'avatar_path' => null,
+        ]);
     }
 
     /* =========================
@@ -147,6 +147,7 @@ class Signup extends Model
     /** @param Builder<Signup> $q */
     public function scopeOrdered(Builder $q): Builder
     {
+        // orden estable por fecha y ID (tabla FIFO)
         return $q->orderBy('created_at', 'asc')->orderBy('id', 'asc');
     }
 
@@ -174,13 +175,75 @@ class Signup extends Model
         return $q->forTable($tableId)->orderByDesc('created_at')->limit($limit);
     }
 
+    /** @param Builder<Signup> $q  — solo los que están dentro de capacidad (jugadores) */
+    public function scopePlayers(Builder $q, int $tableId, int $capacity): Builder
+    {
+        // Sin window functions para compatibilidad: usar created_at asc y cortar en aplicación
+        return $q->forTable($tableId)->counted()->ordered()->limit(max(0, $capacity));
+    }
+
+    /** @param Builder<Signup> $q  — fuera de capacidad (waitlist) */
+    public function scopeWaitlist(Builder $q, int $tableId, int $capacity): Builder
+    {
+        // Estrategia compatible: agarrar más y filtrar en colecciones
+        return $q->forTable($tableId)->ordered();
+    }
+
+    /** Precarga liviana de usuario (id, name, username, email, avatar_path) */
+    public function scopeWithUserLite(Builder $q): Builder
+    {
+        return $q->with(['user:id,name,username,email,avatar_path']);
+    }
+
+    /* =========================
+     * Mutators / Normalizaciones
+     * ========================= */
+
+    /** Normaliza behavior a uno de (good|regular|bad|null) */
+    protected function behavior(): Attribute
+    {
+        return Attribute::set(function ($value) {
+            if ($value === null || $value === '') {
+                return null;
+            }
+            $v = Str::lower(trim((string) $value));
+            return in_array($v, [self::BEHAV_GOOD, self::BEHAV_REGULAR, self::BEHAV_BAD], true)
+                ? $v
+                : self::BEHAV_REGULAR;
+        });
+    }
+
+    /**
+     * Getter “virtual” para attended:
+     * - Si existe columna real `attended`, respeta su valor.
+     * - Si no, deriva de `attendance_confirmed_at` / `no_show_at`.
+     */
+    public function getAttendedAttribute($value): ?bool
+    {
+        if (array_key_exists('attended', $this->getAttributes())) {
+            return $value === null ? null : (bool) $value;
+        }
+
+        $confirmed = $this->getAttributes()['attendance_confirmed_at'] ?? null;
+        if ($confirmed !== null) {
+            return true;
+        }
+
+        $noShow = $this->getAttributes()['no_show_at'] ?? null;
+        if ($noShow !== null) {
+            return false;
+        }
+
+        return null;
+    }
+
     /* =========================
      * Atributos calculados
      * ========================= */
 
     /**
-     * Posición (1-based) entre inscriptos contados, estable por (created_at, id).
-     * Usa relación precargada si existe; si no, una COUNT en BD (eficiente).
+     * Posición (1-based) entre inscriptos contados.
+     * Usa relación precargada si está disponible; si no, COUNT eficiente con tie-break por id.
      */
     public function getPositionAttribute(): ?int
     {
@@ -188,7 +251,7 @@ class Signup extends Model
             return null;
         }
 
-        // Si el modelo de mesa y sus signups están cargados, calcular en memoria
+        // En memoria si la mesa y sus signups están cargados
         if ($this->relationLoaded('gameTable')) {
             $mesa = $this->getRelation('gameTable');
             if ($mesa && $mesa->relationLoaded('signups')) {
@@ -203,7 +266,7 @@ class Signup extends Model
             }
         }
 
-        // Query estable por tie-break de id
+        // Query estable (sin window functions)
         $createdAt = $this->created_at instanceof Carbon ? $this->created_at : null;
         $id = (int) $this->id;
         $tableId = (int) $this->game_table_id;
@@ -215,10 +278,10 @@ class Signup extends Model
                 if ($createdAt) {
                     $q->where('created_at', '<', $createdAt)
                         ->orWhere(function (Builder $q2) use ($createdAt, $id) {
-                            $q2->where('created_at', '=', $createdAt)->where('id', '<=', $id);
+                            $q2->where('created_at', '=', $createdAt)
+                                ->where('id', '<=', $id);
                         });
                 } else {
-                    // Fallback cuando no hay created_at (poco probable)
                     $q->where('id', '<=', $id);
                 }
             })
@@ -257,22 +320,19 @@ class Signup extends Model
         return $pos ? $pos > $cap : null;
     }
 
-    /**
-     * URL del avatar del usuario (cascade: user->avatar_url > storage > gravatar > default > SVG iniciales).
-     */
+    /** URL de avatar del usuario (cascada robusta) */
     protected function userAvatarUrl(): Attribute
     {
         return Attribute::get(function (): string {
             $u = $this->relationLoaded('user') ? $this->user : null;
 
             if ($u) {
+                // Accessor avatar_url del User si existe
                 try {
-                    // Si el User ya expone avatar_url (accessor), úsalo
                     if (isset($u->avatar_url) && (string) $u->avatar_url !== '') {
                         return (string) $u->avatar_url;
                     }
                 } catch (\Throwable) {
-                    // ignorar y seguir con cascada
                 }
 
                 $path = (string) ($u->avatar_path ?? '');
@@ -309,12 +369,11 @@ class Signup extends Model
         });
     }
 
-    /** Hace “3 min” / “hace 1 hora”, etc. */
+    /** “hace 3 min”, “hace 1 hora”, etc. */
     protected function createdAgo(): Attribute
     {
         return Attribute::get(
-            fn(): ?string =>
-            $this->created_at ? $this->created_at->diffForHumans() : null
+            fn(): ?string => $this->created_at ? $this->created_at->diffForHumans() : null
         );
     }
 
@@ -341,20 +400,19 @@ class Signup extends Model
 
     protected static function booted(): void
     {
-        static::saving(function (Signup $s) {
+        static::saving(function (Signup $s): void {
             $s->game_table_id = (int) $s->game_table_id;
             $s->user_id = (int) $s->user_id;
         });
     }
 
     /* =========================
-     * Helpers de capacidad / consultas
+     * Helpers capacidad / consultas
      * ========================= */
 
     private function tableCapacity(): int
     {
         $tableId = $this->game_table_id ? (int) $this->game_table_id : null;
-
         if ($tableId === null) {
             return 0;
         }
@@ -377,14 +435,13 @@ class Signup extends Model
         }
 
         $capInt = (int) ($cap ?? 0);
-
         $this->memoCapacityTableId = $tableId;
 
         return $this->memoTableCapacity = max(0, $capInt);
     }
 
     /* =========================
-     * Utils (SVG/strings)
+     * Utils (asset/strings/SVG)
      * ========================= */
 
     private function assetSafe(string $path): string
@@ -408,7 +465,9 @@ class Signup extends Model
         $svg = <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="{$size}" height="{$size}" viewBox="0 0 {$size} {$size}" role="img" aria-label="{$text}">
   <rect width="100%" height="100%" rx="{$rx}" ry="{$rx}" fill="{$bg}"/>
-  <text x="50%" y="50%" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu" font-size="{$fontSize}" font-weight="700" fill="{$fg}">{$text}</text>
+  <text x="50%" y="50%" dy="0.35em" text-anchor="middle"
+        font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu"
+        font-size="{$fontSize}" font-weight="700" fill="{$fg}">{$text}</text>
 </svg>
 SVG;
 
@@ -454,6 +513,7 @@ SVG;
 
     protected function serializeDate(DateTimeInterface $date): string
     {
+        // ISO 8601 consistente (APIs/JSON)
         return $date->format(DATE_ATOM);
     }
 }

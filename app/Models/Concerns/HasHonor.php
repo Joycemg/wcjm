@@ -3,21 +3,28 @@
 namespace App\Models\Concerns;
 
 use App\Models\HonorEvent;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * Mixin para modelos que acumulan "honor" (puntos).
- * - Idempotencia vía slug (unique por user_id + slug).
- * - Cálculo de total eficiente (usa withCount/withSum si está disponible).
- * - Seguro para hosting compartido (sin operaciones pesadas por defecto).
  *
- * Úsalo en App\Models\User:
- *   use HasHonor;
+ * @mixin \Illuminate\Database\Eloquent\Model
  */
 trait HasHonor
 {
+    /** Cache por-request del total ya calculado. */
+    private ?int $__honor_cached = null;
+
+    /** Cache por-request para evitar múltiples hasColumn() lentos. */
+    private static ?bool $__users_has_honor_column = null;
+
+    /** Flag por-request de existencia de tabla honor_events. */
+    private static ?bool $__has_honor_events_table = null;
+
     /**
      * Relación 1:N con eventos de honor.
      *
@@ -25,30 +32,90 @@ trait HasHonor
      */
     public function honorEvents(): HasMany
     {
-        /** @var \Illuminate\Database\Eloquent\Model $this */
+        /** @var Model $this */
         return $this->hasMany(HonorEvent::class);
     }
 
+    // ===================== SCOPES =====================
+
     /**
-     * Registra un evento de honor.
-     * - Si $slug viene, es idempotente (firstOrCreate): no duplica si ya existe.
-     * - $reason puede ser null (razón opcional).
-     * - $meta se guarda tal cual (debe castear a JSON en HonorEvent).
+     * Proyecta el total de honor como columna "honor_total" sin N+1.
+     *
+     * @param  Builder<Model&self>  $query
+     * @return Builder<Model&self>
      */
+    public function scopeWithHonor(Builder $query): Builder
+    {
+        if (!$this->hasHonorEventsTable()) {
+            return $query;
+        }
+
+        // Laravel 9+ soporta alias en withSum('relation as alias', 'column')
+        try {
+            // @phpstan-ignore-next-line
+            return $query->withSum('honorEvents as honor_total', 'points');
+        } catch (\Throwable) {
+            /** @var Model $this */
+            $he = (new HonorEvent())->getTable();
+            $pk = $this->getKeyName();
+            $table = $this->getTable();
+
+            $sub = HonorEvent::query()
+                ->selectRaw('COALESCE(SUM(points),0)')
+                ->whereColumn("{$he}.user_id", "{$table}.{$pk}");
+
+            return $query->select("{$table}.*")->selectSub($sub, 'honor_total');
+        }
+    }
+
+    /**
+     * Ordena por el total de honor (desc por defecto).
+     *
+     * @param  Builder<Model&self>  $query
+     */
+    public function scopeOrderByHonor(Builder $query, string $direction = 'desc'): Builder
+    {
+        $direction = strtolower($direction) === 'asc' ? 'asc' : 'desc';
+
+        // Asegurar proyección
+        if (!array_key_exists('honor_total', $query->getQuery()->columns ?? [])) {
+            $query = $this->scopeWithHonor($query);
+        }
+
+        return $query->orderByRaw('COALESCE(honor_total, 0) ' . $direction);
+    }
+
+    /**
+     * Filtra por honor >= $min.
+     *
+     * @param  Builder<Model&self>  $query
+     */
+    public function scopeWhereHonorAtLeast(Builder $query, int $min): Builder
+    {
+        $query = $this->scopeWithHonor($query);
+        return $query->havingRaw('COALESCE(honor_total, 0) >= ?', [$min]);
+    }
+
+    /**
+     * Filtra por honor <= $max.
+     *
+     * @param  Builder<Model&self>  $query
+     */
+    public function scopeWhereHonorAtMost(Builder $query, int $max): Builder
+    {
+        $query = $this->scopeWithHonor($query);
+        return $query->havingRaw('COALESCE(honor_total, 0) <= ?', [$max]);
+    }
+
+    // ===================== API principal =====================
+
     public function addHonor(int $points, ?string $reason = null, array $meta = [], ?string $slug = null): HonorEvent
     {
-        /** @var \Illuminate\Database\Eloquent\Model $this */
+        /** @var Model $this */
         $uid = (int) $this->getKey();
 
-        // Normalizar razón y slug para evitar sorpresas (índices VARCHAR(191))
         $reason = $reason !== null ? trim($reason) : null;
-        $slug = $slug !== null ? trim($slug) : null;
-        if ($slug !== null && $slug !== '' && \strlen($slug) > 191) {
-            $slug = \substr($slug, 0, 191);
-        }
-        if ($slug === '') {
-            $slug = null;
-        }
+        $slug = $this->normalizeSlug($slug);
 
         if ($slug !== null) {
             try {
@@ -56,30 +123,18 @@ trait HasHonor
                     ['user_id' => $uid, 'slug' => $slug],
                     ['points' => $points, 'reason' => $reason, 'meta' => $meta]
                 );
-
-                // Asegura que el agregado persistido y el atributo "honor" queden al día
-                // incluso cuando addHonor() se usa fuera de los controladores propios.
-                $this->refreshHonorAggregate(true);
-
-                return $event;
             } catch (QueryException $e) {
-                $errorCode = (string) ($e->getCode() ?? '');
-                $sqlState = (string) ($e->errorInfo[0] ?? '');
-
-                if ($errorCode !== '23000' && $sqlState !== '23000') {
+                if (!$this->isIntegrityConstraintViolation($e)) {
                     throw $e;
                 }
-
-                // Otro proceso lo insertó: devolvemos el existente (idempotencia).
                 $event = HonorEvent::query()
                     ->where('user_id', $uid)
                     ->where('slug', $slug)
                     ->firstOrFail();
-
-                $this->refreshHonorAggregate(true);
-
-                return $event;
             }
+
+            $this->refreshHonorAggregate(true);
+            return $event;
         }
 
         $event = HonorEvent::create([
@@ -91,19 +146,41 @@ trait HasHonor
         ]);
 
         $this->refreshHonorAggregate(true);
-
         return $event;
     }
 
-    /**
-     * Elimina (si existe) un honor_event identificado por slug.
-     * Devuelve true si se borró algún registro.
-     */
+    public function addOrUpdateHonorBySlug(string $slug, int $points, ?string $reason = null, array $meta = []): HonorEvent
+    {
+        /** @var Model $this */
+        $uid = (int) $this->getKey();
+        $slug = $this->normalizeSlug($slug);
+
+        if ($slug === null) {
+            return $this->addHonor($points, $reason, $meta, null);
+        }
+
+        $attrs = ['points' => $points, 'reason' => $reason, 'meta' => $meta];
+
+        try {
+            /** @var HonorEvent $event */
+            $event = HonorEvent::updateOrCreate(['user_id' => $uid, 'slug' => $slug], $attrs);
+        } catch (QueryException $e) {
+            if (!$this->isTableMissing($e)) {
+                throw $e;
+            }
+            /** @var HonorEvent $event */
+            $event = new HonorEvent(['user_id' => $uid] + $attrs + ['slug' => $slug]);
+        }
+
+        $this->refreshHonorAggregate(true);
+        return $event;
+    }
+
     public function removeHonorEventBySlug(string $slug): bool
     {
-        /** @var \Illuminate\Database\Eloquent\Model $this */
-        $slug = trim($slug);
-        if ($slug === '') {
+        /** @var Model $this */
+        $slug = $this->normalizeSlug($slug);
+        if ($slug === null) {
             return false;
         }
 
@@ -120,111 +197,160 @@ trait HasHonor
 
             return $deleted;
         } catch (QueryException $e) {
-            if ($this->isMissingHonorTable($e)) {
+            if ($this->isTableMissing($e)) {
                 return false;
             }
-
             throw $e;
         }
     }
 
     /**
-     * Total de honor del usuario actual.
-     * Estrategia:
-     * 1) Si existe atributo "honor_total" (por withSum/SELECT ... AS honor_total), úsalo.
-     * 2) Si la relación honorEvents está cargada, sumar en memoria.
-     * 3) Consulta directa SUM(points) (barata).
-     *
-     * Además, cachea en el atributo dinámico "honor" para reusos en la misma request.
+     * Total calculado (con cache por-request).
      */
     public function getHonorAttribute(): int
     {
-        /** @var \Illuminate\Database\Eloquent\Model $this */
-        // Reusar si ya lo calculamos en esta request
-        $already = $this->getAttributes()['honor'] ?? null;
-        if ($already !== null) {
-            return (int) $already;
+        /** @var Model $this */
+
+        if ($this->__honor_cached !== null) {
+            return $this->__honor_cached;
         }
 
-        // 1) Atributo proyectado (e.g., selectRaw('SUM(...) AS honor_total'))
         $projected = $this->getAttributes()['honor_total'] ?? null;
         if ($projected !== null) {
-            $val = (int) $projected;
-            $this->setAttribute('honor', $val);
-            return $val;
+            return $this->__honor_cached = (int) $projected;
         }
 
-        // 2) Relación cargada
         if ($this->relationLoaded('honorEvents')) {
             /** @var \Illuminate\Support\Collection $rel */
             $rel = $this->getRelation('honorEvents');
-            $val = (int) $rel->sum('points');
-            $this->setAttribute('honor', $val);
-            return $val;
+            return $this->__honor_cached = (int) $rel->sum('points');
         }
 
-        // 3) Consulta directa
-        $val = (int) HonorEvent::query()
-            ->where('user_id', $this->getKey())
-            ->sum('points');
+        try {
+            $sum = (int) HonorEvent::query()
+                ->where('user_id', $this->getKey())
+                ->sum('points');
 
-        $this->setAttribute('honor', $val);
-        return $val;
+            return $this->__honor_cached = $sum;
+        } catch (QueryException $e) {
+            if ($this->isTableMissing($e)) {
+                return $this->__honor_cached = 0;
+            }
+            throw $e;
+        }
     }
 
     /**
-     * Recalcula el total y, si existe la columna "honor" en la tabla del usuario,
-     * lo persiste como agregado (útil para rankings rápidos en hosting compartido).
-     *
-     * @param bool $persist Si true y hay columna users.honor, persiste el agregado.
-     * @return int nuevo total calculado
+     * Accessor ergonomico: devuelve la proyección `honor_total` si existe,
+     * y si no, cae al cálculo normal (`honor`).
+     */
+    public function getHonorTotalAttribute(): int
+    {
+        $projected = $this->getAttributes()['honor_total'] ?? null;
+        return $projected !== null ? (int) $projected : $this->honor;
+    }
+
+    /**
+     * Recalcula y opcionalmente persiste en `users.honor` si existe.
      */
     public function refreshHonorAggregate(bool $persist = false): int
     {
-        /** @var \Illuminate\Database\Eloquent\Model $this */
-        $total = (int) HonorEvent::query()
-            ->where('user_id', $this->getKey())
-            ->sum('points');
+        /** @var Model $this */
 
-        // Cache en el modelo para esta request
-        $this->setAttribute('honor', $total);
+        try {
+            $total = (int) HonorEvent::query()
+                ->where('user_id', $this->getKey())
+                ->sum('points');
+        } catch (QueryException $e) {
+            if ($this->isTableMissing($e)) {
+                $this->__honor_cached = 0;
+                return 0;
+            }
+            throw $e;
+        }
 
-        if ($persist && Schema::hasColumn($this->getTable(), 'honor')) {
-            // Guardado silencioso para no disparar observers costosos
+        $this->__honor_cached = $total;
+
+        if ($persist && $this->usersHasHonorColumn()) {
             $this->forceFill(['honor' => $total])->saveQuietly();
         }
 
         return $total;
     }
 
-    private function isMissingHonorTable(QueryException $e): bool
+    // ===================== Helpers internos =====================
+
+    private function normalizeSlug(?string $slug): ?string
+    {
+        if ($slug === null)
+            return null;
+        $slug = trim($slug);
+        if ($slug === '')
+            return null;
+        if (\strlen($slug) > 191) {
+            $slug = \substr($slug, 0, 191);
+        }
+        return $slug;
+    }
+
+    private function usersHasHonorColumn(): bool
+    {
+        if (self::$__users_has_honor_column !== null) {
+            return self::$__users_has_honor_column;
+        }
+
+        /** @var Model $this */
+        $table = $this->getTable();
+
+        return self::$__users_has_honor_column = Schema::hasColumn($table, 'honor');
+    }
+
+    private function hasHonorEventsTable(): bool
+    {
+        if (self::$__has_honor_events_table !== null) {
+            return self::$__has_honor_events_table;
+        }
+
+        try {
+            self::$__has_honor_events_table = Schema::hasTable((new HonorEvent())->getTable());
+        } catch (\Throwable) {
+            self::$__has_honor_events_table = false;
+        }
+
+        return self::$__has_honor_events_table;
+    }
+
+    private function isIntegrityConstraintViolation(QueryException $e): bool
     {
         $sqlState = (string) ($e->errorInfo[0] ?? '');
-        $driverCode = (string) ($e->errorInfo[1] ?? '');
-        $exceptionCode = (string) $e->getCode();
-        $message = strtolower((string) $e->getMessage());
+        $code = (string) $e->getCode();
+        $msg = strtolower($e->getMessage());
 
-        $states = ['42S02', '42P01']; // MySQL/MariaDB, PostgreSQL
-        if (in_array($sqlState, $states, true) || in_array($exceptionCode, $states, true)) {
-            return true;
-        }
+        if ($sqlState === '23000' || $code === '23000')
+            return true; // ANSI
+        if ($sqlState === '23505' || $code === '23505')
+            return true; // PostgreSQL unique_violation
 
-        if ($driverCode === '1146') { // MySQL/MariaDB table missing
-            return true;
-        }
+        return str_contains($msg, 'unique') || str_contains($msg, 'duplicate');
+    }
 
-        if ($driverCode === '1' && str_contains($message, 'no such table')) {
+    private function isTableMissing(QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        $driverErr = (string) ($e->errorInfo[1] ?? '');
+        $code = (string) $e->getCode();
+        $msg = strtolower($e->getMessage());
+
+        if ($sqlState === '42S02' || $driverErr === '1146')
+            return true; // MySQL/MariaDB
+        if ($driverErr === '1' && str_contains($msg, 'no such table'))
             return true; // SQLite
-        }
+        if ($sqlState === '42P01' || $code === '42P01')
+            return true; // PostgreSQL undefined_table
 
-        if (str_contains($message, 'honor_events') &&
-            (str_contains($message, 'does not exist') ||
-                str_contains($message, "doesn't exist") ||
-                str_contains($message, 'not found'))
-        ) {
-            return true;
-        }
-
-        return false;
+        return str_contains($msg, 'honor_events') &&
+            (str_contains($msg, 'does not exist') ||
+                str_contains($msg, "doesn't exist") ||
+                str_contains($msg, 'not found'));
     }
 }

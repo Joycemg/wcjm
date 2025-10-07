@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Providers;
 
 use Carbon\Carbon;
@@ -12,20 +14,16 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 
-class AppServiceProvider extends ServiceProvider
+final class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
+    /** Register any application services. */
     public function register(): void
     {
-        // Acá podés bindear singletons/clients si los necesitás.
-        // Mantengo limpio por defecto.
+        // Limpio por defecto. Ideal para hosting compartido.
+        // Aquí podrías bindear singletons (clients, etc.) si los necesitás.
     }
 
-    /**
-     * Bootstrap any application services.
-     */
+    /** Bootstrap any application services. */
     public function boot(): void
     {
         $this->configurePagination();
@@ -38,9 +36,13 @@ class AppServiceProvider extends ServiceProvider
 
     private function configurePagination(): void
     {
+        // Usa vistas Tailwind por defecto (las trae Laravel).
         Paginator::useTailwind();
     }
 
+    /**
+     * Respeta APP_FORCE_HTTPS / config('app.force_https') para proxies (ej. Hostinger/Cloudflare).
+     */
     private function enforceHttpsWhenRequested(): void
     {
         if (config('app.force_https', (bool) env('APP_FORCE_HTTPS', false))) {
@@ -52,18 +54,23 @@ class AppServiceProvider extends ServiceProvider
     {
         try {
             Carbon::setLocale(config('app.locale', 'es'));
-        } catch (Throwable $e) {
-            // Evitar que falle el arranque si la extensión de locale no está disponible.
+        } catch (Throwable) {
+            // Evita crash al boot si la locale del SO no está instalada.
         }
 
         if (method_exists(Carbon::class, 'setUtf8')) {
             try {
                 Carbon::setUtf8(true);
-            } catch (Throwable $e) {
+            } catch (Throwable) {
+                // Silente: mejora rendering de fechas en algunos entornos.
             }
         }
     }
 
+    /**
+     * Modo estricto de Eloquent sólo en local/testing (útil para detectar lazy loading).
+     * En producción (hosting compartido) evita overhead innecesario.
+     */
     private function configureEloquentStrictness(): void
     {
         $strict = $this->shouldUseStrictEloquentMode();
@@ -93,6 +100,10 @@ class AppServiceProvider extends ServiceProvider
         }
     }
 
+    /**
+     * Evita problemas de índice/charset en MySQL viejos (ej. shared hosting).
+     * Configurable vía env DB_DEFAULT_STRING_LENGTH.
+     */
     private function configureLegacyStringLength(): void
     {
         if (($len = (int) env('DB_DEFAULT_STRING_LENGTH', 0)) > 0) {
@@ -118,9 +129,7 @@ class AppServiceProvider extends ServiceProvider
             return isset($user->role) && $user->role === $role;
         });
 
-        Blade::if('feature', function (string $key): bool {
-            return (bool) data_get(config('features', []), $key, false);
-        });
+        Blade::if('feature', fn(string $key): bool => (bool) data_get(config('features', []), $key, false));
     }
 
     private function shouldUseStrictEloquentMode(): bool

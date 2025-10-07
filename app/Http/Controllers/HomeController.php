@@ -16,28 +16,28 @@ use Illuminate\Support\Facades\View as ViewFacade;
 use Illuminate\View\View;
 use Illuminate\Support\Str;
 
-class HomeController extends Controller
+/**
+ * Landing / home
+ * - Si el user está logueado, trae su última mesa (consulta mínima).
+ * - Usa scopeSelectIsOpenNow() si existe; si no, calcula localmente.
+ * - Sin N+1: sólo campos necesarios y counts en BD.
+ */
+final class HomeController extends Controller
 {
-    /**
-     * Landing / home
-     * - Si el user está logueado, busca su último signup y carga la mesa mínima.
-     * - Usa scopeSelectIsOpenNow() si existe; si no, calcula is_open_now localmente.
-     */
     public function __invoke(Request $request): View
     {
-        $auth = $this->optionalUser($request); // ← ?User tipado
+        $auth = $this->optionalUser($request); // ?User
 
         /** @var GameTable|null $myMesa */
         $myMesa = null;
 
+        // ===== Última mesa del usuario (si hay signups) =====
         if ($auth && Schema::hasTable('signups')) {
-            // 1) Último signup → sólo el id de mesa (consulta liviana)
             $lastSignupMesaId = Signup::query()
                 ->where('user_id', $auth->id)
                 ->latest('id')
                 ->value('game_table_id'); // int|null
 
-            // 2) Cargar mesa si existe
             if ($lastSignupMesaId) {
                 $query = GameTable::query()
                     ->select([
@@ -56,7 +56,6 @@ class HomeController extends Controller
                         'created_by',
                     ])
                     ->withCount([
-                        // consistente con el resto: sólo signups contados
                         'signups as signups_count' => fn($q) => $q->where('is_counted', 1),
                     ])
                     ->when(
@@ -72,21 +71,19 @@ class HomeController extends Controller
                         ])
                     );
 
-                // find() mantiene GameTable|null
                 $myMesa = $query->find($lastSignupMesaId);
 
-                // 3) Si NO vino is_open_now desde el scope, calcularlo localmente
                 if ($myMesa instanceof GameTable) {
-                    $isOpenNowAttr = $myMesa->getAttribute('is_open_now'); // bool|null
-                    if ($isOpenNowAttr === null) {
+                    // Si no vino del scope, calcular localmente
+                    if ($myMesa->getAttribute('is_open_now') === null) {
                         $myMesa->setAttribute('is_open_now', $this->computeIsOpenNow($myMesa));
                     }
                 }
 
                 if (config('app.debug')) {
-                    Log::debug('HomeController myMesa', [
+                    Log::debug('HomeController: última mesa del usuario', [
                         'user_id' => $auth->id,
-                        'mesaId_from_signup' => $lastSignupMesaId,
+                        'mesaId_from_sig' => $lastSignupMesaId,
                         'found_mesa' => $myMesa?->id,
                         'is_open_now' => (bool) $myMesa?->getAttribute('is_open_now'),
                         'signups_count' => $myMesa?->signups_count,
@@ -95,10 +92,11 @@ class HomeController extends Controller
             }
         }
 
-        // ¿Existe el partial de tarjeta?
+        // Si existen parciales de tarjeta, la vista se encarga; si no, damos fallback
         $hasMesaCardPartial = ViewFacade::exists('mesas._card') || ViewFacade::exists('tables._card');
         $latestTables = $hasMesaCardPartial ? collect() : $this->latestTablesFallback();
 
+        // ===== Contexto de permisos para la card =====
         $myMesaContext = [
             'notesUrl' => null,
             'canSeeNotes' => false,
@@ -110,9 +108,10 @@ class HomeController extends Controller
             $isManager = (int) $myMesa->manager_id === (int) $auth->id;
             $isOwner = (int) $myMesa->created_by === (int) $auth->id;
             $isAdmin = ($auth->role ?? null) === 'admin';
+            $isParticipant = true; // viene de tener un signup
+
             $myMesaContext['isManager'] = $isManager;
             $myMesaContext['isOwner'] = $isOwner;
-            $isParticipant = true; // el usuario llegó aquí por tener una inscripción vigente
             $myMesaContext['canSeeNotes'] = Route::has('mesas.notes') && ($isManager || $isOwner || $isAdmin || $isParticipant);
             if ($myMesaContext['canSeeNotes']) {
                 $myMesaContext['notesUrl'] = route('mesas.notes', $myMesa);
@@ -127,30 +126,27 @@ class HomeController extends Controller
         ]);
     }
 
-    /**
-     * Cálculo local de is_open_now (fallback si no hay scope).
-     */
+    /** Cálculo local de is_open_now (fallback). */
     private function computeIsOpenNow(GameTable $mesa): bool
     {
-        if (!$mesa->is_open) {
+        if (!$mesa->is_open)
             return false;
-        }
 
-        $opensRaw = $mesa->getAttribute('opens_at');
-        if ($opensRaw === null) {
+        $raw = $mesa->getAttribute('opens_at');
+        if ($raw === null)
             return true;
-        }
 
         $tz = $this->tz();
-        $openAt = $opensRaw instanceof CarbonInterface
-            ? Carbon::instance($opensRaw)->timezone($tz)
-            : Carbon::parse((string) $opensRaw, $tz);
+        $openAt = $raw instanceof CarbonInterface
+            ? Carbon::instance($raw)->timezone($tz)
+            : Carbon::parse((string) $raw, $tz);
 
         return $this->nowTz()->greaterThanOrEqualTo($openAt);
     }
 
     /**
-     * Devuelve una colección lista para mostrar mesas recientes cuando no hay partiales custom.
+     * Fallback simple de “mesas recientes” cuando no existen parciales custom.
+     * Usa cache corto para aligerar el home en hosting compartido.
      */
     private function latestTablesFallback(): Collection
     {
@@ -159,70 +155,54 @@ class HomeController extends Controller
         }
 
         $limit = max(0, (int) config('mesas.home_latest_limit', 4));
-        if ($limit === 0) {
+        if ($limit === 0)
             return collect();
-        }
 
         $fetch = function () use ($limit): array {
             $query = GameTable::query()
-                ->select([
-                    'id',
-                    'title',
-                    'description',
-                    'capacity',
-                    'image_path',
-                    'image_url',
-                    'is_open',
-                    'opens_at',
-                    'created_at',
-                    'updated_at',
-                ])
-                ->withCount([
-                    'signups as signups_count' => fn($q) => $q->where('is_counted', 1),
-                ])
+                ->select(['id', 'title', 'description', 'capacity', 'image_path', 'image_url', 'is_open', 'opens_at', 'created_at', 'updated_at'])
+                ->withCount(['signups as signups_count' => fn($q) => $q->where('is_counted', 1)])
                 ->orderByDesc('is_open')
                 ->orderByDesc('created_at')
                 ->limit($limit);
 
             if (method_exists(GameTable::class, 'scopeSelectIsOpenNow')) {
-                $query->selectIsOpenNow();
-                $query->orderByDesc('is_open_now');
+                $query->selectIsOpenNow()->orderByDesc('is_open_now');
             }
 
-            $rows = $query->get();
-
-            return $rows->map(fn(GameTable $mesa) => $this->formatMesaForHome($mesa))->all();
+            return $query->get()
+                ->map(fn(GameTable $m) => $this->formatMesaForHome($m))
+                ->all();
         };
 
-        $cacheSeconds = max(0, (int) config('mesas.home_latest_cache_seconds', 180));
-        $cacheKey = 'home.latest_tables.v1.' . $limit;
+        $ttl = max(0, (int) config('mesas.home_latest_cache_seconds', 180));
+        $cacheKey = 'home.latest_tables:v2:' . $limit;
 
-        $data = $cacheSeconds > 0
-            ? Cache::remember($cacheKey, $cacheSeconds, $fetch)
-            : $fetch();
+        $data = $ttl > 0 ? Cache::remember($cacheKey, $ttl, $fetch) : $fetch();
 
         return collect($data);
     }
 
+    /** Empaqueta la mesa con campos ya listos para la vista. */
     private function formatMesaForHome(GameTable $mesa): array
     {
         $tz = $this->tz();
 
-        $opensAt = $mesa->opens_at instanceof CarbonInterface
-            ? $mesa->opens_at->timezone($tz)
-            : null;
-
+        $opensAt = $mesa->opens_at instanceof CarbonInterface ? $mesa->opens_at->timezone($tz) : null;
         $isOpenNowAttr = $mesa->getAttribute('is_open_now');
         $isOpenNow = $isOpenNowAttr === null ? $this->computeIsOpenNow($mesa) : (bool) $isOpenNowAttr;
 
         $capacity = max(0, (int) $mesa->capacity);
         $signed = (int) ($mesa->signups_count ?? 0);
 
+        // Si tu modelo expone accessor image_url_resolved, úsalo; si no, caé a image_url o placeholder:
+        $image = $mesa->getAttribute('image_url_resolved') ?? ($mesa->image_url ?: null);
+
         return [
             'id' => (int) $mesa->id,
             'title' => (string) $mesa->title,
             'excerpt' => Str::limit((string) ($mesa->description ?? ''), 160),
-            'image' => $mesa->image_url_resolved,
+            'image' => $image,
             'url' => $this->mesaShowUrl((int) $mesa->id),
             'players_label' => sprintf('%d/%d jugadores', $signed, $capacity),
             'signed' => $signed,
@@ -241,10 +221,6 @@ class HomeController extends Controller
 
     private function mesaShowUrl(int $mesaId): string
     {
-        if (Route::has('mesas.show')) {
-            return route('mesas.show', $mesaId);
-        }
-
-        return url('/mesas/' . $mesaId);
+        return Route::has('mesas.show') ? route('mesas.show', $mesaId) : url('/mesas/' . $mesaId);
     }
 }

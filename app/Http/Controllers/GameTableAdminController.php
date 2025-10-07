@@ -13,54 +13,41 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class GameTableAdminController extends Controller
+/**
+ * Acciones administrativas sobre mesas (cierre).
+ * - Idempotente, transaccional y con bloqueo pesimista si el driver lo soporta.
+ * - Dispara GameTableClosed sólo si se cerró en esta operación.
+ */
+final class GameTableAdminController extends Controller
 {
-    /**
-     * Cierra una mesa de forma idempotente.
-     * - Autoriza si puede 'update' O 'close'.
-     * - Transacción + lockForUpdate para evitar carreras.
-     * - Usa closeNow()/closeIfOpen() si existen; si no, fallback manual.
-     * - Dispara GameTableClosed sólo si se cerró ahora.
-     */
     public function close(Request $request, GameTable $mesa): RedirectResponse|JsonResponse
     {
         // Autoriza si NO tiene update ni close (si tiene alguna, pasa)
         if (Gate::denies('update', $mesa) && Gate::denies('close', $mesa)) {
-            $this->authorize('close', $mesa); // forzar 403
+            $this->authorize('close', $mesa); // fuerza 403 con mensaje de Policy si aplica
         }
 
         try {
             $closed = DB::transaction(function () use ($mesa): bool {
                 /** @var GameTable $row */
-                $row = DatabaseUtils::applyPessimisticLock(GameTable::query())
-                    ->findOrFail($mesa->getKey());
+                $row = DatabaseUtils::applyPessimisticLock(GameTable::query())->findOrFail($mesa->getKey());
 
-                // Preferir métodos de dominio si existen
+                // Usa métodos de dominio si existen
                 if (method_exists($row, 'closeNow')) {
                     $did = (bool) $row->closeNow();
                 } elseif (method_exists($row, 'closeIfOpen')) {
                     $did = (bool) $row->closeIfOpen();
                 } else {
-                    // Fallback manual idempotente
-                    $isOpen = (bool) ($row->is_open ?? false);
-                    $isClosed = !is_null($row->closed_at);
-
-                    if ($isOpen && !$isClosed) {
-                        $row->closed_at = now();
-                        $row->is_open = false;
-                        $row->save();
+                    // Fallback manual: idempotente
+                    $did = false;
+                    if ((bool) ($row->is_open ?? false) === true && $row->closed_at === null) {
+                        $row->forceFill(['is_open' => false, 'closed_at' => now()])->save();
                         $did = true;
-                    } else {
-                        $did = false;
                     }
                 }
 
                 if ($did) {
-                    event(GameTableClosed::fromModel(
-                        $row,
-                        true,   // firstClose
-                        null    // signupsCount opcional
-                    ));
+                    event(GameTableClosed::fromModel($row, true, null));
                 }
 
                 return $did;
@@ -69,15 +56,11 @@ class GameTableAdminController extends Controller
             if ($request->wantsJson()) {
                 return $this->jsonOk(
                     ['closed' => $closed, 'table_id' => $mesa->id],
-                    ['msg' => $closed ? 'Mesa cerrada y historial registrado.' : 'La mesa ya estaba cerrada.']
+                    ['message' => $closed ? 'Mesa cerrada y historial registrado.' : 'La mesa ya estaba cerrada.']
                 );
             }
 
-            return back()->with(
-                $closed ? 'ok' : 'ok', // mantener una sola key de flash
-                $closed ? 'Mesa cerrada y historial registrado.' : 'La mesa ya estaba cerrada.'
-            );
-
+            return back()->with('ok', $closed ? 'Mesa cerrada y historial registrado.' : 'La mesa ya estaba cerrada.');
         } catch (Throwable $e) {
             Log::error('Falló el cierre de mesa', [
                 'table_id' => $mesa->id,
@@ -85,10 +68,10 @@ class GameTableAdminController extends Controller
             ]);
 
             if ($request->wantsJson()) {
-                return $this->jsonFail('No se pudo cerrar la mesa.', 500);
+                return $this->jsonFail('No se pudo cerrar la mesa. Intentalo de nuevo.', 500);
             }
 
-            return back()->with('error', 'No se pudo cerrar la mesa.');
+            return back()->with('error', 'No se pudo cerrar la mesa. Intentalo de nuevo.');
         }
     }
 }
