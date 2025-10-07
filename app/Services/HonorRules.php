@@ -28,9 +28,13 @@ final class HonorRules
             $slug
         );
 
+        $changed = (bool) $event->wasRecentlyCreated;
+
         if (method_exists($user, 'removeHonorEventBySlug')) {
-            $user->removeHonorEventBySlug("{$slug}:undo");
+            $changed = $user->removeHonorEventBySlug("{$slug}:undo") || $changed;
         }
+
+        $this->refreshHonorAggregateIfNeeded($user, $changed);
 
         return $event;
     }
@@ -44,12 +48,16 @@ final class HonorRules
 
         $slug = "mesa:{$mesa->id}:signup:{$signup->id}:no_show";
 
-        return $user->addHonor(
+        $event = $user->addHonor(
             -20,
             HonorEvent::R_NO_SHOW,
             ['mesa_id' => (int) $mesa->id, 'signup_id' => (int) $signup->id, 'by' => (int) $manager->id],
             $slug
         );
+
+        $this->refreshHonorAggregateIfNeeded($user, (bool) $event->wasRecentlyCreated);
+
+        return $event;
     }
 
     /**
@@ -82,13 +90,17 @@ final class HonorRules
             $slug
         );
 
+        $changed = (bool) $event->wasRecentlyCreated;
+
         if ($type === 'good' && method_exists($user, 'removeHonorEventBySlug')) {
-            $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:good");
+            $changed = $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:good") || $changed;
         }
 
         if ($type === 'bad' && method_exists($user, 'removeHonorEventBySlug')) {
-            $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:bad");
+            $changed = $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:bad") || $changed;
         }
+
+        $this->refreshHonorAggregateIfNeeded($user, $changed);
 
         return $event;
     }
@@ -138,5 +150,12 @@ final class HonorRules
         }
 
         return [$user, $mesa];
+    }
+
+    private function refreshHonorAggregateIfNeeded(User $user, bool $changed): void
+    {
+        if ($changed && method_exists($user, 'refreshHonorAggregate')) {
+            $user->refreshHonorAggregate(true);
+        }
     }
 }

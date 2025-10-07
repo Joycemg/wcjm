@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
 
@@ -105,25 +106,22 @@ class HonorDecayInactivity extends Command
         // -------- 5) Inserción MASIVA (INSERT … SELECT) idempotente --------
         // NOTA: Recomendado tener un índice/unique en honor_events (user_id, slug)
         // para garantizar idempotencia también a nivel DB (ver migración al final).
-        $select = DB::table('users as u')
+        $select = (clone $candidates)
             ->selectRaw('u.id as user_id')
             ->selectRaw('? as points', [$points])
             ->selectRaw('? as reason', [$reason])
             ->selectRaw('? as meta', [$metaJson])
             ->selectRaw('? as slug', [$slug])
-            ->selectRaw('NOW() as created_at')
-            ->selectRaw('NOW() as updated_at')
-            ->leftJoinSub($activeSub, 's', 's.user_id', '=', 'u.id')
-            ->leftJoin('honor_events as he', function ($j) use ($slug) {
-                $j->on('he.user_id', '=', 'u.id')->where('he.slug', '=', $slug);
-            })
-            ->where('u.created_at', '<', $toUtc)
-            ->whereNull('s.user_id')
-            ->whereNull('he.user_id');
+            ->selectRaw('CURRENT_TIMESTAMP as created_at')
+            ->selectRaw('CURRENT_TIMESTAMP as updated_at');
 
-        // Laravel soporta insertUsing para hacer INSERT…SELECT sin traer datos a PHP.
-        // Esto es ideal en hosting compartido (poca RAM/CPU).
-        $beforeCount = (clone $select)->count('user_id');
+        $candidateIds = (clone $candidates)
+            ->select('u.id as candidate_id')
+            ->pluck('candidate_id')
+            ->map(static fn($id) => (int) $id)
+            ->all();
+
+        $beforeCount = \count($candidateIds);
 
         if ($beforeCount === 0) {
             $this->info('No hay usuarios a penalizar. Listo.');
@@ -136,6 +134,8 @@ class HonorDecayInactivity extends Command
                 $select
             );
         });
+
+        $this->refreshUsersHonorAggregate($candidateIds);
 
         // Como insertUsing no siempre devuelve filas afectadas en todos los drivers,
         // reportamos el "planificado" ($beforeCount), que en condiciones normales coincide.
@@ -173,5 +173,28 @@ class HonorDecayInactivity extends Command
         // Por defecto: mes anterior al actual (en tz dada)
         $now = CarbonImmutable::now($tz)->startOfMonth()->subMonthNoOverflow();
         return [$now->year, (int) $now->format('n')];
+    }
+
+    private function refreshUsersHonorAggregate(array $userIds): void
+    {
+        if ($userIds === [] || !Schema::hasColumn('users', 'honor')) {
+            return;
+        }
+
+        $now = now();
+        $subquery = 'SELECT COALESCE(SUM(points), 0) FROM honor_events WHERE honor_events.user_id = users.id';
+
+        foreach (array_chunk($userIds, 500) as $chunk) {
+            if ($chunk === []) {
+                continue;
+            }
+
+            DB::table('users')
+                ->whereIn('id', $chunk)
+                ->update([
+                    'honor' => DB::raw("({$subquery})"),
+                    'updated_at' => $now,
+                ]);
+        }
     }
 }
