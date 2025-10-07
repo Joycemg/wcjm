@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration {
     public function up(): void
     {
+        if (!Schema::hasTable('signups')) {
+            return;
+        }
+
         // 1) Chequeo de duplicados antes de aplicar UNIQUE(user_id)
         $hasDuplicates = DB::table('signups')
             ->select('user_id')
