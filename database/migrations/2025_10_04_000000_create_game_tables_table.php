@@ -8,7 +8,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('game_tables', function (Blueprint $table) {
+        $schema = Schema::connection($this->getConnection());
+
+        if ($schema->hasTable('game_tables')) {
+            return;
+        }
+
+        $schema->create('game_tables', function (Blueprint $table) {
             $table->id();
 
             $table->string('title', 120);

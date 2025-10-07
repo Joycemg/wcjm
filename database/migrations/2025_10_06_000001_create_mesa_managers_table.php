@@ -10,7 +10,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('mesa_managers', function (Blueprint $t) {
+        $schema = Schema::connection($this->getConnection());
+
+        if ($schema->hasTable('mesa_managers')) {
+            return;
+        }
+
+        $schema->create('mesa_managers', function (Blueprint $t) {
             $t->id();
             $t->foreignIdFor(GameTable::class, 'mesa_id')->constrained('game_tables')->cascadeOnDelete();
             $t->foreignIdFor(User::class)->constrained()->cascadeOnDelete();

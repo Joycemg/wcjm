@@ -8,7 +8,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('honor_events', function (Blueprint $t) {
+        $schema = Schema::connection($this->getConnection());
+
+        if ($schema->hasTable('honor_events')) {
+            return;
+        }
+
+        $schema->create('honor_events', function (Blueprint $t) {
             $t->id();
             $t->foreignIdFor(User::class)->constrained()->cascadeOnDelete();
             $t->integer('points');
