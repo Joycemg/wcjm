@@ -100,9 +100,8 @@
                 <a class="btn"
                    href="{{ route('mesas.index') }}">Mesas</a>
 
-                @php use Illuminate\Support\Facades\Route as RouteFacade; @endphp
                 @can('manage-tables')
-                    @if(RouteFacade::has('mesas.create'))
+                    @if(\Illuminate\Support\Facades\Route::has('mesas.create'))
                         <a class="btn gold"
                            href="{{ route('mesas.create') }}">➕ Nueva mesa</a>
                     @endif
