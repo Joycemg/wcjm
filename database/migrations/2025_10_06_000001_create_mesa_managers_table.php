@@ -17,6 +17,7 @@ return new class extends Migration {
             $t->unique(['mesa_id', 'user_id']);
         });
     }
+
     public function down(): void
     {
         Schema::dropIfExists('mesa_managers');

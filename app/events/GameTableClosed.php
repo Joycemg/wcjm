@@ -25,34 +25,28 @@ final class GameTableClosed
     /** contador de inscriptos (si lo tenés precargado) */
     public readonly ?int $signupsCount;
 
-    /** versión/revisión opcional para invalidar cachés */
-    public readonly ?int $rev;
-
     private function __construct(
         int $tableId,
         ?string $closedAtIso,
         ?int $closedAtMs,
         bool $firstClose,
-        ?int $signupsCount,
-        ?int $rev
+        ?int $signupsCount
     ) {
         $this->tableId = $tableId;
         $this->closedAtIso = $closedAtIso;
         $this->closedAtMs = $closedAtMs;
         $this->firstClose = $firstClose;
         $this->signupsCount = $signupsCount;
-        $this->rev = $rev;
     }
 
     /**
      * Crea el evento desde el modelo SIN serializarlo (ideal hosting compartido).
-     * Pasá $signupsCount / $rev si ya vienen en el query para evitar hits extra.
+     * Pasá $signupsCount si ya viene en el query para evitar hits extra.
      */
     public static function fromModel(
         GameTable $table,
         bool $firstClose = true,
-        ?int $signupsCount = null,
-        ?int $rev = null
+        ?int $signupsCount = null
     ): self {
         $closed = $table->closed_at?->clone()->utc();
 
@@ -61,8 +55,7 @@ final class GameTableClosed
             $closed?->toIso8601String(),
             $closed ? (int) ($closed->getTimestamp() * 1000) : null,
             $firstClose,
-            $signupsCount,
-            $rev
+            $signupsCount
         );
     }
 
@@ -74,7 +67,6 @@ final class GameTableClosed
             'closed_at_ms' => $this->closedAtMs,
             'first_close' => $this->firstClose,
             'signups_count' => $this->signupsCount,
-            'rev' => $this->rev,
         ];
     }
 }
