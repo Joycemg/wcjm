@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Throwable;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,44 +28,49 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        /** ------------------------------
-         *  UI / Navegación
-         * ------------------------------ */
-        // Paginación con Tailwind (Breeze/Jetstream/Blade por defecto)
-        Paginator::useTailwind();
+        $this->configurePagination();
+        $this->enforceHttpsWhenRequested();
+        $this->configureCarbonLocale();
+        $this->configureEloquentStrictness();
+        $this->configureLegacyStringLength();
+        $this->registerBladeConditionals();
+    }
 
-        // Forzar HTTPS en prod si lo configurás
-        // APP_FORCE_HTTPS=true o config('app.force_https')=true
+    private function configurePagination(): void
+    {
+        Paginator::useTailwind();
+    }
+
+    private function enforceHttpsWhenRequested(): void
+    {
         if (config('app.force_https', (bool) env('APP_FORCE_HTTPS', false))) {
             URL::forceScheme('https');
         }
+    }
 
-        /** ------------------------------
-         *  Fechas / Locale
-         * ------------------------------ */
+    private function configureCarbonLocale(): void
+    {
         try {
             Carbon::setLocale(config('app.locale', 'es'));
-        } catch (\Throwable $e) {
-            // no romper si el locale no existe
+        } catch (Throwable $e) {
+            // Evitar que falle el arranque si la extensión de locale no está disponible.
         }
+
         if (method_exists(Carbon::class, 'setUtf8')) {
             try {
                 Carbon::setUtf8(true);
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
             }
         }
+    }
 
-        /** ------------------------------
-         *  Eloquent "strict mode" en dev/test
-         *  (detecta N+1, atributos faltantes, etc.)
-         * ------------------------------ */
-        $strict = app()->environment(['local', 'testing']);
+    private function configureEloquentStrictness(): void
+    {
+        $strict = $this->shouldUseStrictEloquentMode();
 
         if (method_exists(Model::class, 'shouldBeStrict')) {
-            // Laravel 10/11+: activa todo el modo estricto
             Model::shouldBeStrict($strict);
         } else {
-            // Versiones previas: activar de a uno si existen
             if (method_exists(Model::class, 'preventLazyLoading')) {
                 Model::preventLazyLoading($strict);
             }
@@ -76,7 +82,6 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        // Log útil si ocurre lazy loading (te señala el modelo y la relación)
         if ($strict && method_exists(Model::class, 'handleLazyLoadingViolationUsing')) {
             Model::handleLazyLoadingViolationUsing(function ($model, string $relation): void {
                 Log::warning('Lazy loading detectado', [
@@ -86,37 +91,40 @@ class AppServiceProvider extends ServiceProvider
                 ]);
             });
         }
+    }
 
-        /** ------------------------------
-         *  Compatibilidad MySQL antiguo (opcional)
-         *  Seteá DB_DEFAULT_STRING_LENGTH=191 para esquemas legacy
-         * ------------------------------ */
+    private function configureLegacyStringLength(): void
+    {
         if (($len = (int) env('DB_DEFAULT_STRING_LENGTH', 0)) > 0) {
             Schema::defaultStringLength($len);
         }
+    }
 
-        /** ------------------------------
-         *  Blade helpers
-         * ------------------------------ */
-        // @admin('rol') => por defecto 'admin'
+    private function registerBladeConditionals(): void
+    {
         Blade::if('admin', function (string $role = 'admin'): bool {
             $user = auth()->user();
-            if (!$user)
+            if (!$user) {
                 return false;
+            }
 
-            // Compatibilidad con paquetes de roles
             if (method_exists($user, 'hasRole')) {
                 return (bool) $user->hasRole($role);
             }
             if (method_exists($user, 'hasAnyRole')) {
                 return (bool) $user->hasAnyRole([$role]);
             }
+
             return isset($user->role) && $user->role === $role;
         });
 
-        // @feature('clave') -> lee config('features.clave', false)
         Blade::if('feature', function (string $key): bool {
             return (bool) data_get(config('features', []), $key, false);
         });
+    }
+
+    private function shouldUseStrictEloquentMode(): bool
+    {
+        return app()->environment(['local', 'testing']);
     }
 }
