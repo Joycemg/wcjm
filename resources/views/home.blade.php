@@ -6,75 +6,392 @@
 @push('head')
 <meta name="description" content="Organizá partidas, descubrí mesas abiertas y sumate a la comunidad.">
 <style>
-/* ====== Home (solo light, simple y liviano) ====== */
-:root{ --muted:#6b7280; --border:#e5e7eb; --maroon:#7b2d26; }
-
-.home-wrap{max-width:960px;margin-inline:auto;padding:1rem}
-.card-pad{padding:1rem}
-.section{margin-top:1rem}
-
-.home-hero{display:grid;gap:1.25rem;grid-template-columns:minmax(0,1fr) minmax(0,320px);align-items:flex-start}
-.home-hero-main{display:flex;flex-direction:column;gap:.85rem}
-.home-title{margin:.2rem 0;color:var(--maroon);line-height:1.15}
-.home-sub{margin:0;color:var(--muted);font-size:1rem}
-
-.link{color:var(--maroon);text-decoration:none}
-.link:hover{text-decoration:underline}
-
-.home-actions{display:flex;gap:.6rem;flex-wrap:wrap}
-
-.home-benefits{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}
-.home-benefits li{display:flex;gap:.5rem;align-items:flex-start;color:var(--muted)}
-.home-benefits li span:first-child{font-size:1.15rem;line-height:1.4}
-.home-benefits strong{color:var(--maroon)}
-
-.home-hero-aside{padding:1rem;border:1px dashed var(--border);border-radius:.75rem;display:flex;flex-direction:column;gap:.6rem;background:#fff}
-.home-hero-aside h2{margin:0;color:var(--maroon);font-size:1.05rem}
-.home-hero-aside ul{list-style:none;margin:0;padding:0;display:grid;gap:.45rem;color:var(--muted);font-size:.95rem}
-.home-hero-aside li{display:flex;gap:.4rem;align-items:flex-start}
-.home-hero-aside .emoji{font-size:1.05rem;line-height:1.3}
-
-.home-tips{display:grid;gap:.9rem;margin-top:1rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-.home-tip{padding:1rem;border:1px solid var(--border);border-radius:.75rem;display:flex;flex-direction:column;gap:.45rem;background:#fff}
-.home-tip h3{margin:0;color:var(--maroon);font-size:1rem}
-.home-tip p{margin:0;color:var(--muted);font-size:.95rem}
-
-.mesa-card{display:flex;gap:1rem;align-items:flex-start}
-.mesa-thumb{flex:0 0 160px;border-radius:.6rem;overflow:hidden;border:1px solid var(--border);background:#f8f9fa}
-.mesa-thumb img{width:100%;height:120px;object-fit:cover;display:block}
-.mesa-body{flex:1 1 auto;min-width:0}
-.mesa-title{margin:0 0 .25rem;line-height:1.2}
-.mesa-desc{margin:.25rem 0 .5rem;color:var(--muted);font-size:.95rem}
-.mesa-meta{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin:.25rem 0 .5rem}
-
-.pill{padding:.15rem .6rem;border-radius:999px;border:1px solid var(--border);font-size:.85rem;line-height:1.5;background:#fff}
-.pill.ok{background:#e7f8f1;color:#065f46;border-color:#a7e6cf}
-.pill.off{background:#f3f4f6;color:#374151}
-
-.mesa-avatars{display:flex;align-items:center;gap:.35rem;margin:.35rem 0}
-.mesa-avatars .ava{width:28px;height:28px;border-radius:999px;overflow:hidden;border:1px solid var(--border);display:inline-block;background:#fff}
-.mesa-avatars .ava img{width:100%;height:100%;object-fit:cover;display:block}
-.mesa-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
-
-.mesas-grid{display:grid;gap:1rem;margin-top:1rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-.mesa-mini{display:flex;flex-direction:column;gap:.5rem;padding:1rem;border:1px solid var(--border);border-radius:.75rem;background:#fff}
-.mesa-mini-thumb{border-radius:.6rem;overflow:hidden;border:1px solid var(--border)}
-.mesa-mini-thumb img{width:100%;height:160px;object-fit:cover;display:block}
-.mesa-mini-title{margin:0;font-size:1.05rem;line-height:1.35}
-.mesa-mini-desc{margin:0;color:var(--muted);font-size:.95rem}
-.mesa-mini-footer{margin-top:auto;display:flex;gap:.5rem;flex-wrap:wrap}
-
-.cta-explore{padding:1rem;border:1px dashed var(--border);border-radius:.6rem;text-align:center;background:#fff}
-.muted{color:var(--muted);font-size:.95rem}
-
-@media (max-width:640px){
-  .mesa-card{flex-direction:column}
-  .mesa-thumb{flex:0 0 auto;width:100%}
-  .mesa-thumb img{height:180px}
+/* ====== Home · Comunidad de juegos de mesa ====== */
+.home-wrap {
+  max-width: 1040px;
+  margin-inline: auto;
+  padding: 1rem;
+  display: grid;
+  gap: 1.5rem;
 }
 
-@media (max-width:860px){
-  .home-hero{grid-template-columns:1fr}
+.card-pad { padding: 1.5rem; }
+.section { margin-top: 1.25rem; }
+
+.home-hero {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 1.75rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  align-items: stretch;
+  background: linear-gradient(140deg, rgba(251, 191, 36, 0.12), rgba(52, 211, 153, 0.08));
+}
+
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% -25% auto -25%;
+  height: 420px;
+  background: radial-gradient(circle at center, rgba(251, 191, 36, 0.35), rgba(251, 191, 36, 0));
+  filter: blur(0.4px);
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.home-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -15% -40% -25%;
+  height: 360px;
+  background: radial-gradient(circle at center, rgba(52, 211, 153, 0.3), rgba(52, 211, 153, 0));
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.home-hero-main,
+.home-hero-aside {
+  position: relative;
+  z-index: 2;
+}
+
+.home-hero-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.home-title {
+  margin: .2rem 0;
+  font-family: 'Righteous', cursive;
+  font-size: clamp(2.1rem, 4vw, 2.75rem);
+  color: #fef3c7;
+  text-shadow: 0 4px 12px rgba(15, 23, 42, 0.4);
+  line-height: 1.1;
+}
+
+.home-sub {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1.05rem;
+}
+
+.link {
+  color: #fcd34d;
+  text-decoration: underline;
+  text-decoration-color: rgba(252, 211, 77, 0.55);
+  text-decoration-thickness: 2px;
+}
+
+.link:hover { color: #fbbf24; }
+
+.home-actions {
+  display: flex;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.home-benefits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .6rem;
+}
+
+.home-benefits li {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: .4rem .9rem;
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.home-benefits li span:first-child {
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.home-benefits strong { color: #fff; }
+
+.home-hero-aside {
+  padding: 1.35rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.85));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.home-hero-aside h2 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.home-hero-aside ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .55rem;
+  color: #1f2937;
+  font-size: .98rem;
+}
+
+.home-hero-aside li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: .5rem;
+  align-items: start;
+}
+
+.home-hero-aside .emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.2);
+}
+
+.home-tips {
+  display: grid;
+  gap: 1.1rem;
+  margin-top: 1.4rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.home-tip {
+  padding: 1.25rem;
+  border-radius: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.9), rgba(30, 64, 175, 0.6));
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.35);
+}
+
+.home-tip h3 {
+  margin: 0;
+  color: #fbbf24;
+  font-size: 1.05rem;
+}
+
+.home-tip p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: .96rem;
+}
+
+.mesa-card {
+  display: flex;
+  gap: 1.1rem;
+  align-items: flex-start;
+}
+
+.mesa-thumb {
+  flex: 0 0 160px;
+  border-radius: .8rem;
+  overflow: hidden;
+  border: 2px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.mesa-thumb img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.mesa-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mesa-title {
+  margin: 0 0 .35rem;
+  line-height: 1.2;
+  color: #111827;
+  font-weight: 700;
+}
+
+.mesa-desc {
+  margin: .2rem 0 .5rem;
+  color: #4c566a;
+  font-size: .97rem;
+}
+
+.mesa-meta {
+  display: flex;
+  gap: .45rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: .25rem 0 .6rem;
+}
+
+.pill {
+  padding: .15rem .65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  font-size: .85rem;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+}
+
+.pill.ok {
+  background: rgba(52, 211, 153, 0.22);
+  color: #0f5132;
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+.pill.off {
+  background: rgba(148, 163, 184, 0.25);
+  color: #0f172a;
+}
+
+.mesa-avatars {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  margin: .35rem 0;
+}
+
+.mesa-avatars .ava {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+  background: #fff;
+}
+
+.mesa-avatars .ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mesa-actions {
+  display: flex;
+  gap: .55rem;
+  flex-wrap: wrap;
+  margin-top: .6rem;
+}
+
+.mesas-grid {
+  display: grid;
+  gap: 1.1rem;
+  margin-top: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.mesa-mini {
+  display: flex;
+  flex-direction: column;
+  gap: .65rem;
+  padding: 1.1rem;
+  border-radius: 1rem;
+  background: linear-gradient(160deg, rgba(255,255,255,0.95), rgba(226,232,240,0.85));
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.1);
+}
+
+.mesa-mini-thumb {
+  border-radius: .75rem;
+  overflow: hidden;
+  border: 2px solid rgba(15, 23, 42, 0.12);
+}
+
+.mesa-mini-thumb img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+}
+
+.mesa-mini-title {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.35;
+  color: #111827;
+  font-weight: 700;
+}
+
+.mesa-mini-desc {
+  margin: 0;
+  color: #4c566a;
+  font-size: .95rem;
+}
+
+.mesa-mini-footer {
+  margin-top: auto;
+  display: flex;
+  gap: .55rem;
+  flex-wrap: wrap;
+}
+
+.cta-explore {
+  padding: 1.15rem;
+  border: 2px dashed rgba(251, 191, 36, 0.6);
+  border-radius: .9rem;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.75);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+.muted {
+  color: #4c566a;
+  font-size: .95rem;
+}
+
+@media (max-width: 860px) {
+  .home-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .home-hero-aside {
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-wrap {
+    padding: .75rem;
+  }
+
+  .card-pad {
+    padding: 1rem;
+  }
+
+  .mesa-card {
+    flex-direction: column;
+  }
+
+  .mesa-thumb {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .mesa-thumb img {
+    height: 180px;
+  }
 }
 </style>
 @endpush
