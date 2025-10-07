@@ -21,13 +21,18 @@ final class HonorRules
         [$user, $mesa] = $this->loadSignupMin($signup);
 
         $slug = "mesa:{$mesa->id}:signup:{$signup->id}:attended";
-
-        return $user->addHonor(
+        $event = $user->addHonor(
             10,
             HonorEvent::R_ATTEND_OK,
             ['mesa_id' => (int) $mesa->id, 'signup_id' => (int) $signup->id, 'by' => (int) $manager->id],
             $slug
         );
+
+        if (method_exists($user, 'removeHonorEventBySlug')) {
+            $user->removeHonorEventBySlug("{$slug}:undo");
+        }
+
+        return $event;
     }
 
     /**
@@ -70,12 +75,22 @@ final class HonorRules
         // Un encargado (manager) puede votar una sola vez por tipo para ese signup
         $slug = "mesa:{$mesa->id}:signup:{$signup->id}:behavior:{$type}:by:{$manager->id}";
 
-        return $user->addHonor(
+        $event = $user->addHonor(
             $points,
             $reason,
             ['mesa_id' => (int) $mesa->id, 'signup_id' => (int) $signup->id, 'by' => (int) $manager->id],
             $slug
         );
+
+        if ($type === 'good' && method_exists($user, 'removeHonorEventBySlug')) {
+            $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:good");
+        }
+
+        if ($type === 'bad' && method_exists($user, 'removeHonorEventBySlug')) {
+            $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:bad");
+        }
+
+        return $event;
     }
 
     /* ========================= Helpers ========================= */

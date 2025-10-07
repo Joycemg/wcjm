@@ -82,6 +82,33 @@ trait HasHonor
     }
 
     /**
+     * Elimina (si existe) un honor_event identificado por slug.
+     * Devuelve true si se borró algún registro.
+     */
+    public function removeHonorEventBySlug(string $slug): bool
+    {
+        /** @var \Illuminate\Database\Eloquent\Model $this */
+        $slug = trim($slug);
+        if ($slug === '') {
+            return false;
+        }
+
+        try {
+            return HonorEvent::query()
+                ->where('user_id', $this->getKey())
+                ->where('slug', $slug)
+                ->limit(1)
+                ->delete() > 0;
+        } catch (QueryException $e) {
+            if ($this->isMissingHonorTable($e)) {
+                return false;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
      * Total de honor del usuario actual.
      * Estrategia:
      * 1) Si existe atributo "honor_total" (por withSum/SELECT ... AS honor_total), úsalo.
@@ -148,5 +175,36 @@ trait HasHonor
         }
 
         return $total;
+    }
+
+    private function isMissingHonorTable(QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        $driverCode = (string) ($e->errorInfo[1] ?? '');
+        $exceptionCode = (string) $e->getCode();
+        $message = strtolower((string) $e->getMessage());
+
+        $states = ['42S02', '42P01']; // MySQL/MariaDB, PostgreSQL
+        if (in_array($sqlState, $states, true) || in_array($exceptionCode, $states, true)) {
+            return true;
+        }
+
+        if ($driverCode === '1146') { // MySQL/MariaDB table missing
+            return true;
+        }
+
+        if ($driverCode === '1' && str_contains($message, 'no such table')) {
+            return true; // SQLite
+        }
+
+        if (str_contains($message, 'honor_events') &&
+            (str_contains($message, 'does not exist') ||
+                str_contains($message, "doesn't exist") ||
+                str_contains($message, 'not found'))
+        ) {
+            return true;
+        }
+
+        return false;
     }
 }
