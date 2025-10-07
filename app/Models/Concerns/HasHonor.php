@@ -52,10 +52,16 @@ trait HasHonor
 
         if ($slug !== null) {
             try {
-                return HonorEvent::firstOrCreate(
+                $event = HonorEvent::firstOrCreate(
                     ['user_id' => $uid, 'slug' => $slug],
                     ['points' => $points, 'reason' => $reason, 'meta' => $meta]
                 );
+
+                // Asegura que el agregado persistido y el atributo "honor" queden al día
+                // incluso cuando addHonor() se usa fuera de los controladores propios.
+                $this->refreshHonorAggregate(true);
+
+                return $event;
             } catch (QueryException $e) {
                 $errorCode = (string) ($e->getCode() ?? '');
                 $sqlState = (string) ($e->errorInfo[0] ?? '');
@@ -65,20 +71,28 @@ trait HasHonor
                 }
 
                 // Otro proceso lo insertó: devolvemos el existente (idempotencia).
-                return HonorEvent::query()
+                $event = HonorEvent::query()
                     ->where('user_id', $uid)
                     ->where('slug', $slug)
                     ->firstOrFail();
+
+                $this->refreshHonorAggregate(true);
+
+                return $event;
             }
         }
 
-        return HonorEvent::create([
+        $event = HonorEvent::create([
             'user_id' => $uid,
             'points' => $points,
             'reason' => $reason,
             'meta' => $meta,
             'slug' => null,
         ]);
+
+        $this->refreshHonorAggregate(true);
+
+        return $event;
     }
 
     /**
@@ -94,11 +108,17 @@ trait HasHonor
         }
 
         try {
-            return HonorEvent::query()
+            $deleted = HonorEvent::query()
                 ->where('user_id', $this->getKey())
                 ->where('slug', $slug)
                 ->limit(1)
                 ->delete() > 0;
+
+            if ($deleted) {
+                $this->refreshHonorAggregate(true);
+            }
+
+            return $deleted;
         } catch (QueryException $e) {
             if ($this->isMissingHonorTable($e)) {
                 return false;
