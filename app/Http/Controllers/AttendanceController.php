@@ -314,6 +314,13 @@ class AttendanceController extends Controller
      */
     private function addHonorSafe(User $user, int $points, string $reason, array $meta, string $slug): bool
     {
+        $slug = trim($slug);
+        if ($slug === '') {
+            $slug = null;
+        } elseif ($slug !== null && \strlen($slug) > 191) {
+            $slug = \substr($slug, 0, 191);
+        }
+
         try {
             if (method_exists($user, 'addHonor')) {
                 $event = $user->addHonor($points, $reason, $meta, $slug);

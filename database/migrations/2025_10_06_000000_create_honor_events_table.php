@@ -13,7 +13,9 @@ return new class extends Migration {
             $t->integer('points');
             $t->string('reason')->nullable();
             $t->json('meta')->nullable();
-            $t->string('slug')->nullable(); // idempotencia por acción (único por user)
+            // Longitud 191 => compatible con índices UNIQUE en MySQL/MariaDB utf8mb4
+            // sin depender de Schema::defaultStringLength().
+            $t->string('slug', 191)->nullable(); // idempotencia por acción (único por user)
             $t->timestamps();
 
             $t->index('user_id');
