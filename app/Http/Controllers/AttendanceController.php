@@ -7,6 +7,7 @@ use App\Models\Signup;
 use App\Models\HonorEvent;
 use App\Models\User;
 use App\Support\DatabaseUtils;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -267,15 +268,57 @@ class AttendanceController extends Controller
      */
     private function addHonorSafe(User $user, int $points, string $reason, array $meta, string $slug): void
     {
-        if (method_exists($user, 'addHonor')) {
-            $user->addHonor($points, $reason, $meta, $slug);
-            return;
+        try {
+            if (method_exists($user, 'addHonor')) {
+                $user->addHonor($points, $reason, $meta, $slug);
+                return;
+            }
+
+            HonorEvent::firstOrCreate(
+                ['user_id' => $user->id, 'slug' => $slug],
+                ['points' => $points, 'reason' => $reason, 'meta' => $meta]
+            );
+        } catch (QueryException $e) {
+            if ($this->isMissingHonorTable($e)) {
+                // Entornos sin la tabla honor_events: omite silenciosamente.
+                return;
+            }
+
+            throw $e;
+        }
+    }
+
+    private function isMissingHonorTable(QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        $driverCode = (string) ($e->errorInfo[1] ?? '');
+        $exceptionCode = (string) $e->getCode();
+        $message = strtolower((string) $e->getMessage());
+
+        $states = ['42S02', '42P01']; // MySQL/MariaDB, PostgreSQL
+        if (in_array($sqlState, $states, true) || in_array($exceptionCode, $states, true)) {
+            return true;
         }
 
-        HonorEvent::firstOrCreate(
-            ['user_id' => $user->id, 'slug' => $slug],
-            ['points' => $points, 'reason' => $reason, 'meta' => $meta]
-        );
+        if ($driverCode === '1146') { // MySQL/MariaDB table missing
+            return true;
+        }
+
+        if ($driverCode === '1' && str_contains($message, 'no such table')) {
+            // SQLite "no such table: honor_events"
+            return true;
+        }
+
+        if (str_contains($message, 'honor_events') &&
+            (str_contains($message, 'does not exist') ||
+                str_contains($message, "doesn't exist") ||
+                str_contains($message, 'not found'))
+        ) {
+            // Fallback para otros drivers
+            return true;
+        }
+
+        return false;
     }
 
     private function signupHasColumn(string $column): bool
