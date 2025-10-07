@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Http\Middleware\AdminOnly;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -33,6 +35,7 @@ final class AppServiceProvider extends ServiceProvider
         $this->configureEloquentStrictness();
         $this->configureLegacyStringLength();
         $this->registerBladeConditionals();
+        $this->registerRouteMiddlewareAliases();
     }
 
     /**
@@ -161,6 +164,15 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         Blade::if('feature', fn(string $key): bool => (bool) data_get(config('features', []), $key, false));
+    }
+
+    private function registerRouteMiddlewareAliases(): void
+    {
+        /** @var Router $router */
+        $router = $this->app['router'];
+
+        $router->aliasMiddleware('admin', AdminOnly::class);
+        $router->aliasMiddleware('admin.only', AdminOnly::class);
     }
 
     private function shouldUseStrictEloquentMode(): bool
