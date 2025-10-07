@@ -147,24 +147,6 @@
                 </datalist>
             </div>
 
-            {{-- Encargado cuenta como jugador --}}
-            <div>
-                <input type="hidden"
-                       name="manager_counts_as_player"
-                       value="0">
-                <label for="manager_counts_as_player"
-                       style="display:flex;gap:.5rem;align-items:center">
-                    <input id="manager_counts_as_player"
-                           type="checkbox"
-                           name="manager_counts_as_player"
-                           value="1"
-                           {{ old('manager_counts_as_player', $mesa->manager_counts_as_player) ? 'checked' : '' }}>
-                    <span>{{ __('El encargado ocupa un lugar de jugador') }}</span>
-                </label>
-                <small class="muted">{{ __('Desmarcá si querés liberar un asiento adicional para los jugadores.') }}</small>
-                @error('manager_counts_as_player') <div class="text-danger">{{ $message }}</div> @enderror
-            </div>
-
             {{-- Nota privada para el encargado --}}
             <div style="grid-column:1/-1">
                 <label for="manager_note">{{ __('Nota interna para el encargado (opcional)') }}</label>
