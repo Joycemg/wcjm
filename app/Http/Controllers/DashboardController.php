@@ -13,9 +13,10 @@ class DashboardController extends Controller
     {
         // Requiere middleware 'auth' en la ruta, pero por las dudas:
         $user = $request->user();
+        $honorFromUser = data_get($user, 'honor');
         $stats = [
             // Mantiene compatibilidad si tu User tiene accessor/attr 'honor'
-            'honor' => data_get($user, 'honor'),
+            'honor' => is_numeric($honorFromUser) ? (int) $honorFromUser : null,
             // Sumatoria real desde honor_events (si existe la tabla)
             'honor_total' => null,
         ];
@@ -56,9 +57,20 @@ class DashboardController extends Controller
 
         // =============== Honor total (si hay tabla) ===============
         if ($hasHonorEvents) {
-            $stats['honor_total'] = (int) DB::table('honor_events')
+            $honorTotal = (int) DB::table('honor_events')
                 ->where('user_id', $user->id)
                 ->sum('points');
+
+            $stats['honor_total'] = $honorTotal;
+            $stats['honor'] = $honorTotal;
+        } elseif ($stats['honor'] === null && Schema::hasColumn('users', 'honor')) {
+            // Instalaciones que persisten el agregado directo en users.honor.
+            $storedHonor = (int) DB::table('users')
+                ->where('id', $user->id)
+                ->value('honor');
+
+            $stats['honor'] = $storedHonor;
+            $stats['honor_total'] = $storedHonor;
         }
 
         // =============== Historia (si hay tabla) ===============
