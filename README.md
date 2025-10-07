@@ -59,5 +59,10 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# wcjm
-# wcjm
+# WCJM
+
+Aplicación Laravel optimizada para comunidades de rol y juegos de mesa. Incluye panel de control, gestión de mesas, ranking de honor y componentes frontend livianos pensados para hosting compartido.
+
+## Deploy rápido en Hostinger
+
+La guía `docs/DEPLOY_HOSTINGER.md` resume los pasos para publicar el proyecto en un plan compartido (sin Redis ni colas externas). También encontrarás las nuevas variables de entorno para personalizar la sección de mesas destacadas en la home.

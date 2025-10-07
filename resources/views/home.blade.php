@@ -16,6 +16,8 @@
 .home-hero{display:flex;flex-direction:column;gap:.75rem}
 .home-title{margin:.2rem 0;color:var(--maroon);line-height:1.15}
 .home-sub{margin:0;color:var(--muted)}
+.link{color:var(--maroon);text-decoration:none}
+.link:hover{text-decoration:underline}
 .home-actions{display:flex;gap:.6rem;flex-wrap:wrap}
 .home-divider{height:1px;background:var(--border);margin:.5rem 0 1rem}
 
@@ -36,6 +38,14 @@
 .mesa-avatars .ava img{width:100%;height:100%;object-fit:cover;display:block}
 .mesa-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.5rem}
 
+.mesas-grid{display:grid;gap:1rem;margin-top:1rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.mesa-mini{display:flex;flex-direction:column;gap:.5rem;padding:1rem;border:1px solid var(--border);border-radius:.75rem;background:#fff}
+.mesa-mini-thumb{border-radius:.6rem;overflow:hidden;border:1px solid var(--border)}
+.mesa-mini-thumb img{width:100%;height:160px;object-fit:cover;display:block}
+.mesa-mini-title{margin:0;font-size:1.05rem;line-height:1.35}
+.mesa-mini-desc{margin:0;color:var(--muted);font-size:.95rem}
+.mesa-mini-footer{margin-top:auto;display:flex;gap:.5rem;flex-wrap:wrap}
+
 .cta-explore{padding:1rem;border:1px dashed var(--border);border-radius:.6rem;text-align:center}
 .muted{color:var(--muted)}
 
@@ -52,6 +62,8 @@
   .pill.ok{background:#0a2e22;color:#b8f5e1;border-color:#1f5a46}
   .pill.off{background:#1a1c1f;color:#d1d5db;border-color:#2d2f33}
   .cta-explore{border-color:#2d2f33}
+  .mesa-mini{background:#151618;border-color:#2d2f33}
+  .mesa-mini-thumb{border-color:#2d2f33}
 }
 </style>
 @endpush
@@ -80,7 +92,7 @@
           <a class="btn" href="{{ route('mesas.mine') }}" aria-label="Ir a mi mesa">Ir a mi mesa</a>
         @else
           <a class="btn" href="{{ $mesasIndexUrl }}">Mis mesas</a>
-        @endif>
+        @endif
 
         {{-- Mostrar "Crear mesa" según policy (GameTablePolicy@create) --}}
         @can('create', \App\Models\GameTable::class)
@@ -202,13 +214,58 @@
       $partial = collect($partials)->first(fn($v) => \Illuminate\Support\Facades\View::exists($v));
     @endphp
 
+    @php $latestTables = $latestTables ?? collect(); @endphp
+
     @if($partial)
       @include($partial)
     @else
-      <div class="cta-explore">
-        <p class="muted" style="margin:0 0 .6rem">¿Buscás una partida?</p>
-        <a class="btn ok" href="{{ $mesasIndexUrl }}">Explorar mesas abiertas</a>
-      </div>
+      @if($latestTables->isNotEmpty())
+        <div class="mesas-grid" aria-live="polite">
+          @foreach($latestTables as $mesa)
+            <article class="mesa-mini" aria-labelledby="mesa-mini-{{ $mesa['id'] }}">
+              @if(!empty($mesa['image']))
+                <a class="mesa-mini-thumb" href="{{ $mesa['url'] }}">
+                  <img
+                    src="{{ $mesa['image'] }}"
+                    alt="Imagen de {{ $mesa['title'] }}"
+                    loading="lazy" decoding="async" width="320" height="180">
+                </a>
+              @endif
+
+              <h3 id="mesa-mini-{{ $mesa['id'] }}" class="mesa-mini-title">
+                <a href="{{ $mesa['url'] }}" class="link">{{ $mesa['title'] }}</a>
+              </h3>
+
+              @if(!empty($mesa['excerpt']))
+                <p class="mesa-mini-desc">{{ $mesa['excerpt'] }}</p>
+              @endif
+
+              <div class="mesa-meta">
+                <span class="pill">{{ $mesa['players_label'] }}</span>
+                <span class="pill {{ $mesa['status_class'] }}">{{ $mesa['status_label'] }}</span>
+
+                @if(!empty($mesa['opens_at_human']))
+                  <span class="pill" title="{{ $mesa['opens_at_title'] }}">Abre {{ $mesa['opens_at_human'] }}</span>
+                @endif
+              </div>
+
+              @if(!empty($mesa['updated_human']))
+                <p class="muted" style="margin:0;font-size:.8rem">Actualizada {{ $mesa['updated_human'] }}</p>
+              @endif
+
+              <div class="mesa-mini-footer">
+                <a class="btn" href="{{ $mesa['url'] }}">Ver mesa</a>
+                <a class="btn" href="{{ $mesasIndexUrl }}">Ver todas</a>
+              </div>
+            </article>
+          @endforeach
+        </div>
+      @else
+        <div class="cta-explore">
+          <p class="muted" style="margin:0 0 .6rem">¿Buscás una partida?</p>
+          <a class="btn ok" href="{{ $mesasIndexUrl }}">Explorar mesas abiertas</a>
+        </div>
+      @endif
     @endif
   </section>
 
