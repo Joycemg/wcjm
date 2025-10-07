@@ -83,6 +83,7 @@ class AttendanceController extends Controller
 
             // Persistimos cambios de estado en Signup (si vinieron en la request)
             $dirty = false;
+            $honorTouched = false;
             $nowStamp = null;
             if (array_key_exists('attended', $data)) {
                 $nowAttended = (bool) $data['attended'];
@@ -141,23 +142,23 @@ class AttendanceController extends Controller
                 $nowAttended = (bool) $data['attended'];
 
                 if ($nowAttended && $prevAttended !== true) {
-                    $this->addHonorSafe(
+                    $honorTouched = $this->addHonorSafe(
                         $target,
                         +10,
                         HonorEvent::R_ATTEND_OK,
                         ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                         "mesa:{$mesaId}:signup:{$signupId}:attended"
-                    );
+                    ) || $honorTouched;
                 }
 
                 if (!$nowAttended && $prevAttended === true) {
-                    $this->addHonorSafe(
+                    $honorTouched = $this->addHonorSafe(
                         $target,
                         -10,
                         HonorEvent::R_ATTEND_UNDO,
                         ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                         "mesa:{$mesaId}:signup:{$signupId}:attended:undo"
-                    );
+                    ) || $honorTouched;
                 }
             }
 
@@ -190,72 +191,77 @@ class AttendanceController extends Controller
                     }
                 }
 
-                $this->addHonorSafe(
+                $honorTouched = $this->addHonorSafe(
                     $target,
                     -20,
                     HonorEvent::R_NO_SHOW,
                     ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                     "mesa:{$mesaId}:signup:{$signupId}:no_show"
-                );
+                ) || $honorTouched;
             }
 
             // 3) Comportamiento: transición entre good/regular/bad con undos correctos
             if ($hasBehaviorColumn && $newBehavior !== $prevBehavior) {
                 if ($newBehavior === 'good') {
                     if ($prevBehavior === 'bad') {
-                        $this->addHonorSafe(
+                        $honorTouched = $this->addHonorSafe(
                             $target,
                             +10,
                             HonorEvent::R_BEHAV_UNDO_BAD,
                             ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                             "mesa:{$mesaId}:signup:{$signupId}:behavior:undo:bad"
-                        );
+                        ) || $honorTouched;
                     }
-                    $this->addHonorSafe(
+                    $honorTouched = $this->addHonorSafe(
                         $target,
                         +10,
                         HonorEvent::R_BEHAV_GOOD,
                         ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                         "mesa:{$mesaId}:signup:{$signupId}:behavior:good"
-                    );
+                    ) || $honorTouched;
 
                 } elseif ($newBehavior === 'bad') {
                     if ($prevBehavior === 'good') {
-                        $this->addHonorSafe(
+                        $honorTouched = $this->addHonorSafe(
                             $target,
                             -10,
                             HonorEvent::R_BEHAV_UNDO_GOOD,
                             ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                             "mesa:{$mesaId}:signup:{$signupId}:behavior:undo:good"
-                        );
+                        ) || $honorTouched;
                     }
-                    $this->addHonorSafe(
+                    $honorTouched = $this->addHonorSafe(
                         $target,
                         -10,
                         HonorEvent::R_BEHAV_BAD,
                         ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                         "mesa:{$mesaId}:signup:{$signupId}:behavior:bad"
-                    );
+                    ) || $honorTouched;
 
                 } else { // regular
                     if ($prevBehavior === 'good') {
-                        $this->addHonorSafe(
+                        $honorTouched = $this->addHonorSafe(
                             $target,
                             -10,
                             HonorEvent::R_BEHAV_UNDO_GOOD,
                             ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                             "mesa:{$mesaId}:signup:{$signupId}:behavior:undo:good"
-                        );
+                        ) || $honorTouched;
                     } elseif ($prevBehavior === 'bad') {
-                        $this->addHonorSafe(
+                        $honorTouched = $this->addHonorSafe(
                             $target,
                             +10,
                             HonorEvent::R_BEHAV_UNDO_BAD,
                             ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                             "mesa:{$mesaId}:signup:{$signupId}:behavior:undo:bad"
-                        );
+                        ) || $honorTouched;
                     }
                 }
+            }
+
+            if ($honorTouched && method_exists($target, 'refreshHonorAggregate')) {
+                // Recalcula y persiste el total si la columna users.honor existe.
+                $target->refreshHonorAggregate(true);
             }
         });
 
@@ -266,22 +272,23 @@ class AttendanceController extends Controller
      * Inserta honor de manera segura e idempotente por (user_id, slug).
      * Si el método addHonor existe en User, lo usa; si no, cae a firstOrCreate().
      */
-    private function addHonorSafe(User $user, int $points, string $reason, array $meta, string $slug): void
+    private function addHonorSafe(User $user, int $points, string $reason, array $meta, string $slug): bool
     {
         try {
             if (method_exists($user, 'addHonor')) {
-                $user->addHonor($points, $reason, $meta, $slug);
-                return;
+                $event = $user->addHonor($points, $reason, $meta, $slug);
+                return $event->wasRecentlyCreated;
             }
 
-            HonorEvent::firstOrCreate(
+            $event = HonorEvent::firstOrCreate(
                 ['user_id' => $user->id, 'slug' => $slug],
                 ['points' => $points, 'reason' => $reason, 'meta' => $meta]
             );
+            return $event->wasRecentlyCreated;
         } catch (QueryException $e) {
             if ($this->isMissingHonorTable($e)) {
                 // Entornos sin la tabla honor_events: omite silenciosamente.
-                return;
+                return false;
             }
 
             throw $e;
