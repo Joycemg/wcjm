@@ -8,11 +8,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        if (Schema::hasTable('vote_histories')) {
+        $schema = Schema::connection($this->getConnection());
+
+        if ($schema->hasTable('vote_histories')) {
             return;
         }
 
-        Schema::create('vote_histories', function (Blueprint $table) {
+        $schema->create('vote_histories', function (Blueprint $table) {
             $table->id();
 
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();

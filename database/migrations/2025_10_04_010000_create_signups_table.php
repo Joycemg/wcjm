@@ -7,11 +7,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        if (Schema::hasTable('signups')) {
+        $schema = Schema::connection($this->getConnection());
+
+        if ($schema->hasTable('signups')) {
             return;
         }
 
-        Schema::create('signups', function (Blueprint $table) {
+        $schema->create('signups', function (Blueprint $table) {
             $table->id();
 
             $table->foreignId('game_table_id')->constrained('game_tables')->cascadeOnDelete();
