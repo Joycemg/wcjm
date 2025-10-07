@@ -20,14 +20,14 @@ final class SignupController extends Controller
 
     /**
      * Anotar / mover voto a una mesa.
-     * - Idempotente ante duplicados (unique user_id).
-     * - Reintenta frente a deadlocks/lock timeouts (hosting compartido).
+     * - Idempotente ante duplicados (unique por user_id).
+     * - Reintenta frente a deadlocks / lock timeouts.
      */
     public function store(Request $request, GameTable $mesa): JsonResponse|RedirectResponse
     {
         $user = $this->requireUser($request);
 
-        // Chequeo rápido fuera de transacción (se valida otra vez adentro)
+        // Chequeo rápido fuera de transacción
         if (!$this->mesaIsOpenNow($mesa)) {
             return $this->respond($request, false, 'Esta mesa no está abierta para votar.', 422);
         }
@@ -46,6 +46,12 @@ final class SignupController extends Controller
                         return ['status' => 'closed'];
                     }
 
+                    // (Opcional) bloquear sobrecupos en caliente
+                    // $taken = (int) Signup::where('game_table_id', $mesaRow->id)->where('is_counted', 1)->lockForUpdate()->count();
+                    // if ($taken >= (int) $mesaRow->capacity) {
+                    //     return ['status' => 'full'];
+                    // }
+
                     // Lock del signup del usuario (si existe)
                     $existing = DatabaseUtils::applyPessimisticLock(
                         Signup::query()->where('user_id', $user->id)
@@ -61,11 +67,9 @@ final class SignupController extends Controller
                         if ($doSwitch) {
                             $from = (int) $existing->game_table_id;
 
-                            // Mover
                             $existing->game_table_id = (int) $mesaRow->id;
                             $existing->save();
 
-                            // Tocar updated_at de ambas mesas (barato, sin eventos)
                             $now = now();
                             DB::table('game_tables')->where('id', $from)->update(['updated_at' => $now]);
                             DB::table('game_tables')->where('id', $mesaRow->id)->update(['updated_at' => $now]);
@@ -73,10 +77,7 @@ final class SignupController extends Controller
                             return ['status' => 'switched', 'from' => $from];
                         }
 
-                        return [
-                            'status' => 'other',
-                            'otherMesaId' => (int) $existing->game_table_id,
-                        ];
+                        return ['status' => 'other', 'otherMesaId' => (int) $existing->game_table_id];
                     }
 
                     // Crear signup
@@ -87,7 +88,6 @@ final class SignupController extends Controller
                         'is_manager' => 0,
                     ]);
 
-                    // Tocar updated_at de la mesa destino
                     DB::table('game_tables')->where('id', $mesaRow->id)->update(['updated_at' => now()]);
 
                     return ['status' => 'created'];
@@ -109,11 +109,12 @@ final class SignupController extends Controller
                         ['X-Conflict-Mesa-Id' => (string) ($result['otherMesaId'] ?? '')]
                     ),
                     'closed' => $this->respond($request, false, 'Esta mesa no está abierta para votar.', 422),
+                    'full' => $this->respond($request, false, 'La mesa ya está completa.', 409),
                     default => $this->respond($request, false, 'No se pudo procesar tu voto.', 500),
                 };
 
             } catch (QueryException $e) {
-                // Duplicado (unique user_id) → resolver amigablemente
+                // Violación de UNIQUE → resolver amigablemente
                 if ($this->isUniqueViolation($e)) {
                     $current = Signup::where('user_id', $user->id)->first();
                     if ($current && (int) $current->game_table_id === (int) $mesa->id) {
@@ -133,8 +134,7 @@ final class SignupController extends Controller
 
                 // Deadlock / lock timeout → backoff y reintentar
                 if ($this->isDeadlockOrLockTimeout($e) && $attempt < self::MAX_RETRIES) {
-                    // Jitter pequeño para hosting compartido
-                    usleep(random_int(20_000, 120_000));
+                    usleep(random_int(20_000, 120_000)); // jitter pequeño
                     continue;
                 }
 
@@ -145,9 +145,7 @@ final class SignupController extends Controller
         return $this->respond($request, false, 'No se pudo procesar tu voto.', 500);
     }
 
-    /**
-     * Retirar voto de una mesa.
-     */
+    /** Retirar voto de una mesa. */
     public function destroy(Request $request, GameTable $mesa): JsonResponse|RedirectResponse
     {
         $user = $this->requireUser($request);
@@ -155,9 +153,7 @@ final class SignupController extends Controller
         $deleted = 0;
         DB::transaction(function () use ($user, $mesa, &$deleted) {
             $deleted = DatabaseUtils::applyPessimisticLock(
-                Signup::query()
-                    ->where('game_table_id', (int) $mesa->id)
-                    ->where('user_id', (int) $user->id)
+                Signup::query()->where('game_table_id', (int) $mesa->id)->where('user_id', (int) $user->id)
             )->delete();
 
             if ($deleted) {
@@ -179,14 +175,12 @@ final class SignupController extends Controller
     /** ¿La mesa está abierta "ahora"? Usa huso de pantalla del Controller. */
     private function mesaIsOpenNow(GameTable $mesa): bool
     {
-        if (!$mesa->is_open) {
+        if (!$mesa->is_open)
             return false;
-        }
 
         $opensRaw = $mesa->opens_at;
-        if ($opensRaw === null) {
+        if ($opensRaw === null)
             return true;
-        }
 
         $tz = $this->tz();
         $openAt = $opensRaw instanceof CarbonInterface
@@ -196,9 +190,7 @@ final class SignupController extends Controller
         return $this->nowTz()->greaterThanOrEqualTo($openAt);
     }
 
-    /**
-     * Respuesta JSON/redirect estándar (usa helpers del Controller base).
-     */
+    /** Respuesta JSON/redirect estándar (usa helpers del Controller base). */
     private function respond(
         Request $request,
         bool $success,
@@ -226,21 +218,12 @@ final class SignupController extends Controller
         $code = (int) ($info[1] ?? 0);
         $msg = strtolower((string) ($info[2] ?? $e->getMessage()));
 
-        // SQLSTATE comunes
-        if (in_array($state, ['23000', '23505'], true)) {
-            return true;
-        }
-
-        // MySQL/MariaDB
-        if (in_array($code, [1062, 1169, 1557], true)) {
-            return true;
-        }
-
-        // SQLite
-        if ($code === 19 || str_contains($msg, 'unique constraint failed')) {
-            return true;
-        }
-
+        if (in_array($state, ['23000', '23505'], true))
+            return true; // SQLSTATE
+        if (in_array($code, [1062, 1169, 1557], true))
+            return true;   // MySQL/MariaDB
+        if ($code === 19 || str_contains($msg, 'unique constraint failed'))
+            return true; // SQLite
         return false;
     }
 
@@ -253,14 +236,12 @@ final class SignupController extends Controller
         $msg = strtolower((string) ($info[2] ?? $e->getMessage()));
 
         // MySQL/MariaDB
-        if (in_array($code, [1205, 1213], true)) {
+        if (in_array($code, [1205, 1213], true))
             return true;
-        }
 
         // Postgres
-        if (in_array($state, ['40001', '40P01', '55P03'], true)) {
+        if (in_array($state, ['40001', '40P01', '55P03'], true))
             return true;
-        }
 
         // Mensajes genéricos
         return str_contains($msg, 'deadlock') || str_contains($msg, 'lock wait timeout');

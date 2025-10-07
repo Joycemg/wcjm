@@ -11,20 +11,9 @@ use App\Http\Controllers\{
     HonorRankingController
 };
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes (hostinger-friendly)
-|--------------------------------------------------------------------------
-| - Sin closures (mejor para route:cache).
-| - `verified` es opcional (según config).
-| - Throttle básico para acciones sensibles.
-| - scopeBindings para anidar {signup} dentro de {mesa}.
-*/
-
 Route::pattern('mesa', '[0-9]+');
 Route::pattern('signup', '[0-9]+');
 
-/** Stack de auth con verificación opcional (si tu app no usa verificación, no se aplicará). */
 $authVerified = array_values(array_filter([
     'auth',
     config('auth.require_email_verification', false) ? 'verified' : null,
@@ -40,15 +29,26 @@ Route::middleware($authVerified)->group(function () {
 });
 
 /* =========================
+ * ÁREA ADMIN (ability 'admin')
+ * ========================= */
+Route::middleware(array_merge($authVerified, ['admin.only:can:admin']))
+    ->prefix('admin')->as('admin.')
+    ->group(function () {
+        Route::get('/', [DashboardController::class, 'index'])->name('home');
+        // agregá aquí otras rutas exclusivas de admin
+    });
+
+/* =========================
  * MESAS
  * ========================= */
 Route::name('mesas.')->prefix('mesas')->group(function () use ($authVerified) {
 
+    // Público
     Route::get('/', [GameTableController::class, 'index'])->name('index');
     Route::get('/{mesa}', [GameTableController::class, 'show'])->whereNumber('mesa')->name('show');
 
-    // Crear/editar/actualizar/eliminar (protegidas)
-    Route::middleware($authVerified)->group(function () {
+    // Gestión (solo autenticados + permiso 'manage-tables')
+    Route::middleware(array_merge($authVerified, ['admin.only:can:manage-tables']))->group(function () {
         Route::get('/create', [GameTableController::class, 'create'])->name('create');
         Route::post('/', [GameTableController::class, 'store'])->name('store');
 
@@ -56,7 +56,8 @@ Route::name('mesas.')->prefix('mesas')->group(function () use ($authVerified) {
         Route::put('/{mesa}', [GameTableController::class, 'update'])->whereNumber('mesa')->name('update');
         Route::delete('/{mesa}', [GameTableController::class, 'destroy'])->whereNumber('mesa')->name('destroy');
 
-        // Acciones de estado (open/close)
+        // Estado open/close — si querés exigir rol + permiso:
+        // 'admin.only:mode:all,can:manage-tables,can:admin'
         Route::post('/{mesa}/open', [GameTableController::class, 'open'])->whereNumber('mesa')->name('open');
         Route::post('/{mesa}/close', [GameTableController::class, 'close'])->whereNumber('mesa')->name('close');
 
@@ -77,23 +78,17 @@ Route::name('signups.')->prefix('mesas/{mesa}')
     ->whereNumber('mesa')
     ->middleware($authVerified)
     ->group(function () {
-        // Throttle defensivo (hostinger): 30 req/min por IP/usuario
         Route::post('/signups', [SignupController::class, 'store'])->middleware('throttle:30,1')->name('store');
         Route::delete('/signups', [SignupController::class, 'destroy'])->middleware('throttle:30,1')->name('destroy');
     });
 
 /* =========================
- * ASISTENCIA / COMPORTAMIENTO (HONOR)
- * scopeBindings garantiza que {signup} pertenezca a {mesa}
+ * ASISTENCIA / HONOR
  * ========================= */
 Route::scopeBindings()->group(function () use ($authVerified) {
-    Route::post(
-        '/mesas/{mesa}/signups/{signup}/attendance',
-        [AttendanceController::class, 'update']
-    )
-        ->whereNumber('mesa')
-        ->whereNumber('signup')
-        ->middleware($authVerified)
+    Route::post('/mesas/{mesa}/signups/{signup}/attendance', [AttendanceController::class, 'update'])
+        ->whereNumber('mesa')->whereNumber('signup')
+        ->middleware(array_merge($authVerified, ['admin.only:can:manage-tables']))
         ->name('mesas.signups.attendance');
 });
 

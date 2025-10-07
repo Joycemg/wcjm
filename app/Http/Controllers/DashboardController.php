@@ -7,150 +7,128 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
-class DashboardController extends Controller
+/**
+ * Dashboard con stats ligeros y un historial reciente del usuario.
+ * - Evita N+1 (usa agregados en BD).
+ * - Funciona aunque algunas tablas/columnas aún no existan (instalaciones parciales).
+ */
+final class DashboardController extends Controller
 {
     public function __invoke(Request $request): View
     {
-        // Requiere middleware 'auth' en la ruta, pero por las dudas:
+        /** @var \App\Models\User|null $user */
         $user = $request->user();
-        $honorFromUser = data_get($user, 'honor');
+
         $stats = [
-            // Mantiene compatibilidad si tu User tiene accessor/attr 'honor'
-            'honor' => is_numeric($honorFromUser) ? (int) $honorFromUser : null,
-            // Sumatoria real desde honor_events (si existe la tabla)
-            'honor_total' => null,
+            'honor' => null, // “visible” (preferencia: honor_events sum)
+            'honor_total' => null, // suma real de honor_events (si existe)
+            'honor_persisted' => null, // valor en users.honor (si existe)
         ];
         $history = [];
 
         if (!$user) {
+            // Si no hay sesión, devolvemos un dashboard vacío.
             return view('dashboard', compact('history', 'stats'));
         }
 
-        // =============== Config / límites ===============
+        // ================= Config / límites =================
         $limitCfg = (int) config('taberna.dashboard_history_limit', 30);
         $limit = max(1, min($limitCfg, 100));
 
-        // =============== Memo schema checks (por request) ===============
-        static $hasVoteHistories = null;
-        static $hasGameTables = null;
-        static $hasHonorEvents = null;
-        static $colsVH = null;
-        static $hasUsersHonorColumn = null;
+        // ================= Schema memo =================
+        static $has = null;
+        static $vhCols = null;
 
-        if ($hasVoteHistories === null)
-            $hasVoteHistories = Schema::hasTable('vote_histories');
-        if ($hasGameTables === null)
-            $hasGameTables = Schema::hasTable('game_tables');
-        if ($hasHonorEvents === null)
-            $hasHonorEvents = Schema::hasTable('honor_events');
-        if ($hasUsersHonorColumn === null)
-            $hasUsersHonorColumn = Schema::hasTable('users') && Schema::hasColumn('users', 'honor');
+        if ($has === null) {
+            $has = [
+                'vote_histories' => Schema::hasTable('vote_histories'),
+                'game_tables' => Schema::hasTable('game_tables'),
+                'honor_events' => Schema::hasTable('honor_events'),
+                'users' => Schema::hasTable('users'),
+            ];
+            $has['users.honor'] = $has['users'] && Schema::hasColumn('users', 'honor');
+        }
 
-        if ($hasVoteHistories && $colsVH === null) {
-            $colsVH = [
+        if ($has['vote_histories'] && $vhCols === null) {
+            $vhCols = [
                 'kind' => Schema::hasColumn('vote_histories', 'kind'),
                 'happened_at' => Schema::hasColumn('vote_histories', 'happened_at'),
                 'closed_at' => Schema::hasColumn('vote_histories', 'closed_at'),
                 'game_title' => Schema::hasColumn('vote_histories', 'game_title'),
                 'game_table_id' => Schema::hasColumn('vote_histories', 'game_table_id'),
             ];
-        } elseif ($colsVH === null) {
-            $colsVH = ['kind' => false, 'happened_at' => false, 'closed_at' => false, 'game_title' => false, 'game_table_id' => false];
+        } elseif ($vhCols === null) {
+            $vhCols = ['kind' => false, 'happened_at' => false, 'closed_at' => false, 'game_title' => false, 'game_table_id' => false];
         }
 
-        // =============== Honor total (si hay tabla) ===============
-        if ($hasUsersHonorColumn) {
-            $storedHonor = (int) DB::table('users')
+        // ================= Honor agregado (persistido) =================
+        if ($has['users.honor']) {
+            $stats['honor_persisted'] = (int) DB::table('users')
                 ->where('id', $user->id)
                 ->value('honor');
-
-            $stats['honor_persisted'] = $storedHonor;
-
-            if ($stats['honor'] === null) {
-                $stats['honor'] = $storedHonor;
-            }
         }
 
-        if ($hasHonorEvents) {
-            $honorTotal = (int) DB::table('honor_events')
+        // ================= Honor total (eventos) =================
+        if ($has['honor_events']) {
+            $stats['honor_total'] = (int) DB::table('honor_events')
                 ->where('user_id', $user->id)
                 ->sum('points');
 
-            $stats['honor_total'] = $honorTotal;
-            $stats['honor'] = $honorTotal;
-        } elseif ($stats['honor'] === null && $hasUsersHonorColumn) {
-            // Instalaciones que persisten el agregado directo en users.honor.
+            $stats['honor'] = $stats['honor_total'];
+        } else {
+            // Fallback a la columna persistida si existe
             $stats['honor'] = $stats['honor_persisted'] ?? 0;
             $stats['honor_total'] = $stats['honor'];
         }
 
-        // =============== Historia (si hay tabla) ===============
-        if (!$hasVoteHistories) {
-            return view('dashboard', compact('history', 'stats'));
-        }
+        // ================= Historial =================
+        if ($has['vote_histories']) {
+            // Columna temporal preferida (agnóstico al esquema)
+            $eventCol = $vhCols['happened_at'] ? 'vh.happened_at'
+                : ($vhCols['closed_at'] ? 'vh.closed_at' : 'vh.created_at');
 
-        // Columna temporal preferida
-        $eventCol = $colsVH['happened_at'] ? 'vh.happened_at'
-            : ($colsVH['closed_at'] ? 'vh.closed_at' : 'vh.created_at');
+            $q = DB::table('vote_histories as vh')
+                ->where('vh.user_id', $user->id);
 
-        // Query base
-        $q = DB::table('vote_histories as vh')->where('vh.user_id', $user->id);
-
-        // Filtramos por tipo solo si existe 'kind'
-        if ($colsVH['kind']) {
-            $q->where('vh.kind', 'close');
-        }
-
-        // Join a game_tables solo si existe
-        if ($hasGameTables) {
-            $q->leftJoin('game_tables as gt', 'gt.id', '=', 'vh.game_table_id');
-        }
-
-        // Select mínimo compatible
-        // - mesa_id: si hay join, el id de gt; si no, el de vh (si existe); si no, null
-        // - mesa_title: COALESCE(gt.title, vh.game_title) cuando aplique
-        $selects = [
-            DB::raw($eventCol . ' as event_time'),
-        ];
-
-        if ($hasGameTables) {
-            $selects[] = DB::raw('gt.id as mesa_id');
-            $selects[] = DB::raw(($colsVH['game_title'] ? 'COALESCE(gt.title, vh.game_title)' : 'gt.title') . ' as mesa_title');
-        } else {
-            // Sin join: intentamos proveer algo de contexto desde vote_histories
-            if ($colsVH['game_table_id']) {
-                $selects[] = DB::raw('vh.game_table_id as mesa_id');
-            } else {
-                $selects[] = DB::raw('NULL as mesa_id');
+            if ($vhCols['kind']) {
+                $q->where('vh.kind', 'close');
             }
-            if ($colsVH['game_title']) {
-                $selects[] = DB::raw('vh.game_title as mesa_title');
-            } else {
-                $selects[] = DB::raw('NULL as mesa_title');
+
+            if ($has['game_tables']) {
+                $q->leftJoin('game_tables as gt', 'gt.id', '=', 'vh.game_table_id');
             }
-        }
 
-        $rows = $q->select($selects)
-            ->orderByDesc($eventCol)
-            ->limit($limit)
-            ->get();
+            $select = [DB::raw($eventCol . ' as event_time')];
 
-        // Adaptar a la vista (tipado básico)
-        $history = $rows->map(static function ($r) {
-            $mesa = null;
-            if (!is_null($r->mesa_id)) {
-                $mesa = (object) [
-                    'id' => (int) $r->mesa_id,
-                    'title' => $r->mesa_title,
+            if ($has['game_tables']) {
+                $select[] = DB::raw('gt.id as mesa_id');
+                $select[] = DB::raw(($vhCols['game_title'] ? 'COALESCE(gt.title, vh.game_title)' : 'gt.title') . ' as mesa_title');
+            } else {
+                $select[] = DB::raw($vhCols['game_table_id'] ? 'vh.game_table_id as mesa_id' : 'NULL as mesa_id');
+                $select[] = DB::raw($vhCols['game_title'] ? 'vh.game_title as mesa_title' : 'NULL as mesa_title');
+            }
+
+            $rows = $q->select($select)
+                ->orderByDesc($eventCol)
+                ->limit($limit)
+                ->get();
+
+            $history = $rows->map(static function ($r) {
+                $mesa = null;
+                if ($r->mesa_id !== null) {
+                    $mesa = (object) [
+                        'id' => (int) $r->mesa_id,
+                        'title' => $r->mesa_title,
+                    ];
+                }
+
+                return [
+                    'mesa' => $mesa,
+                    'title_fallback' => $r->mesa_title ?? null,
+                    'last' => $r->event_time, // string/DateTime según driver
                 ];
-            }
-
-            return [
-                'mesa' => $mesa,
-                'title_fallback' => $r->mesa_title ?? null, // si no hubo join, puede venir de vh.game_title
-                'last' => $r->event_time,         // string/DateTime según driver
-            ];
-        })->all();
+            })->all();
+        }
 
         return view('dashboard', compact('history', 'stats'));
     }

@@ -5,17 +5,11 @@
 
 @push('head')
     <style>
+        /* ===== Panel (solo modo claro, minimal) ===== */
         :root {
             --border: #e5e7eb;
             --muted: #6b7280;
             --maroon: #7b2d26;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --border: #2d2f33;
-                --muted: #a7b0ba;
-            }
         }
 
         .dash-wrap {
@@ -48,7 +42,8 @@
             border-radius: 999px;
             border: 1px solid var(--border);
             object-fit: cover;
-            flex: 0 0 32px
+            flex: 0 0 32px;
+            display: block
         }
 
         .dash-title {
@@ -70,12 +65,8 @@
             border: 1px solid #e5e7eb
         }
 
-        @media (prefers-color-scheme: dark) {
-            .honor {
-                background: #1a1c1f;
-                color: #d1d5db;
-                border-color: #2d2f33
-            }
+        .honor svg {
+            display: block
         }
 
         .divider {
@@ -94,7 +85,7 @@
         }
 
         .list li {
-            margin: .2rem 0
+            margin: .25rem 0
         }
 
         .list .title {
@@ -121,6 +112,7 @@
         $history = $history ?? [];
 
         $honor = data_get($stats, 'honor', data_get($user, 'honor'));
+
         // Normalizamos y tomamos hasta 30, ordenando por 'last' desc si existe
         $historyItems = \Illuminate\Support\Collection::wrap($history)
             ->when(
@@ -130,21 +122,24 @@
             ->take(30);
     @endphp
 
-    <section class="card dash-wrap card-pad">
+    <section class="card dash-wrap card-pad"
+             aria-labelledby="dash-title">
         <div class="dash-head">
             <div class="dash-id">
                 <img class="ava"
                      src="{{ $avatar }}"
                      alt="{{ __('Avatar') }}"
-                     loading="lazy"
-                     decoding="async"
                      width="32"
-                     height="32">
-                <h1 class="dash-title">{{ __('Panel') }}</h1>
+                     height="32"
+                     loading="lazy"
+                     decoding="async">
+                <h1 id="dash-title"
+                    class="dash-title">{{ __('Panel') }}</h1>
             </div>
 
             <div class="honor"
-                 title="{{ __('Puntos de honor') }}">
+                 title="{{ __('Puntos de honor') }}"
+                 aria-label="{{ __('Puntos de honor') }}">
                 <svg width="14"
                      height="14"
                      viewBox="0 0 24 24"
@@ -162,7 +157,7 @@
              role="separator"
              aria-hidden="true"></div>
 
-        <h2 style="margin:0 0 .35rem;font-size:1.05rem">{{ __('Historial de mesas votadas') }}</h2>
+        <h2 style="margin:0 0 .35rem;font-size:1.05rem;color:var(--maroon)">{{ __('Historial de mesas votadas') }}</h2>
 
         @if($historyItems->isEmpty())
             <p class="muted"
@@ -175,7 +170,8 @@
                    href="{{ $mesasIndexUrl }}">{{ __('Explorar mesas') }}</a>
             </p>
         @else
-            <ol class="list">
+            <ol class="list"
+                aria-live="polite">
                 @foreach($historyItems as $item)
                     @php
                         $mesa = data_get($item, 'mesa');

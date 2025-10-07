@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\GameTable;
 use App\Models\Signup;
-use App\Models\User; // ← Importa tu User para tipar correctamente
+use App\Models\User;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\View\View as ViewContract;
@@ -14,9 +14,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 
-class GameTableController extends Controller
+/**
+ * CRUD y vistas de mesas.
+ * - Listado y detalle eficientes (sin N+1).
+ * - Carga perezosa con límites sanos para shared hosting.
+ */
+final class GameTableController extends Controller
 {
-    /** Disk para imágenes (soporta public/S3/Backblaze en Hostinger) */
+    /** Disk para imágenes (public/S3/Backblaze…) */
     private function imageDisk(): string
     {
         return (string) config('mesas.image_disk', config('filesystems.default', 'public'));
@@ -28,7 +33,6 @@ class GameTableController extends Controller
         $now = $this->nowTz();
         $q = trim((string) $request->query('q', ''));
         $like = '%' . addcslashes($q, "%_\\") . '%';
-
         $status = $request->query('status');
         $status = \in_array($status, ['open', 'closed'], true) ? $status : null;
 
@@ -36,35 +40,27 @@ class GameTableController extends Controller
             ->select(['id', 'title', 'description', 'capacity', 'image_path', 'image_url', 'is_open', 'opens_at', 'created_at', 'updated_at'])
             ->when(method_exists(GameTable::class, 'scopeSelectIsOpenNow'), fn($qb) => $qb->selectIsOpenNow())
             ->withCount(['signups as signups_count' => fn($q2) => $q2->where('is_counted', 1)])
-            ->when(
-                method_exists(GameTable::class, 'recentSignups'),
-                fn($qb) => $qb->with([
-                    'recentSignups' => fn($q3) => $q3->where('is_counted', 1)->with([
-                        'user:id,username,name,email,avatar_path,updated_at',
-                    ]),
-                ])
-            )
+            ->when(method_exists(GameTable::class, 'recentSignups'), fn($qb) => $qb->with([
+                'recentSignups' => fn($q3) => $q3->where('is_counted', 1)->with([
+                    'user:id,username,name,email,avatar_path,updated_at',
+                ]),
+            ]))
             ->orderByDesc('created_at');
 
         if ($q !== '') {
-            $query->where(function ($w) use ($like) {
-                $w->where('title', 'LIKE', $like)
-                    ->orWhere('description', 'LIKE', $like);
-            });
+            $query->where(fn($w) => $w->where('title', 'LIKE', $like)->orWhere('description', 'LIKE', $like));
         }
 
         if ($status === 'open') {
             $query->where('is_open', true)
                 ->where(fn($w) => $w->whereNull('opens_at')->orWhere('opens_at', '<=', $now));
         } elseif ($status === 'closed') {
-            $query->where(fn($w) => $w
-                ->where('is_open', false)
+            $query->where(fn($w) => $w->where('is_open', false)
                 ->orWhere(fn($w2) => $w2->where('is_open', true)->where('opens_at', '>', $now)));
         }
 
-        $auth = $this->optionalUser($request); // ← tipado ?User
+        $auth = $this->optionalUser($request);
         $myMesaId = null;
-
         if ($auth) {
             $uid = (int) $auth->id;
             $query->withExists(['signups as already_signed' => fn($q2) => $q2->where('user_id', $uid)]);
@@ -94,14 +90,14 @@ class GameTableController extends Controller
         $signups = $mesa->signups()
             ->where('is_counted', 1)
             ->with(['user:id,username,name,email,avatar_path,updated_at'])
-            ->reorder('created_at')->orderBy('id')
+            ->reorder('created_at')->orderBy('id') // orden estable
             ->limit($need)
             ->get();
 
         $players = $signups->take($capacity)->values();
         $waitlist = $signups->slice($capacity)->values()->take($waitlistMax);
 
-        $auth = $this->optionalUser(request()); // ← ?User
+        $auth = $this->optionalUser(request());
         $context = $this->mesaUserContext($auth, $mesa);
         $alreadySigned = $context['isSigned'];
         $myMesaId = $auth ? Signup::where('user_id', $auth->id)->value('game_table_id') : null;
@@ -110,7 +106,7 @@ class GameTableController extends Controller
         $isManager = $context['isManager'];
         $isAdmin = $context['isAdmin'];
         $canManageHonor = $isOwner || $isManager || $isAdmin;
-        $canViewNotes = $context['isSigned'] || $isOwner || $isManager || $isAdmin;
+        $canViewNotes = $alreadySigned || $isOwner || $isManager || $isAdmin;
         $managerCountsAsPlayer = (bool) $mesa->manager_counts_as_player;
 
         return view(
@@ -135,7 +131,6 @@ class GameTableController extends Controller
     {
         $auth = $this->requireUser($request);
         $context = $this->mesaUserContext($auth, $mesa);
-
         abort_unless($context['isSigned'] || $context['isOwner'] || $context['isManager'] || $context['isAdmin'], 403);
 
         $mesa->loadMissing([
@@ -152,10 +147,7 @@ class GameTableController extends Controller
         $note = old('manager_note', (string) ($mesa->manager_note ?? ''));
         $canEdit = $context['isManager'] || $context['isOwner'] || $context['isAdmin'];
 
-        return view(
-            $this->pickView(['mesas.notes', 'tables.notes']),
-            compact('mesa', 'players', 'note', 'canEdit') + $context
-        );
+        return view($this->pickView(['mesas.notes', 'tables.notes']), compact('mesa', 'players', 'note', 'canEdit') + $context);
     }
 
     public function updateNotes(Request $request, GameTable $mesa): RedirectResponse
@@ -164,9 +156,7 @@ class GameTableController extends Controller
         $context = $this->mesaUserContext($auth, $mesa);
         abort_unless($context['isManager'] || $context['isOwner'] || $context['isAdmin'], 403);
 
-        $data = $request->validate([
-            'manager_note' => ['nullable', 'string', 'max:2000'],
-        ]);
+        $data = $request->validate(['manager_note' => ['nullable', 'string', 'max:2000']]);
 
         $note = isset($data['manager_note']) ? Str::of($data['manager_note'])->trim()->toString() : null;
         $mesa->manager_note = $note === '' ? null : $note;
@@ -181,16 +171,14 @@ class GameTableController extends Controller
         $context = $this->mesaUserContext($auth, $mesa);
         abort_unless($context['isManager'] || $context['isAdmin'], 403);
 
-        $data = $request->validate([
-            'playing' => ['required', 'boolean'],
-        ]);
+        $data = $request->validate(['playing' => ['required', 'boolean']]);
 
         $mesa->manager_counts_as_player = (bool) $data['playing'];
         $mesa->save();
 
         $message = $mesa->manager_counts_as_player
-            ? 'Volviste a figurar como jugador.'
-            : 'Quedaste como encargado sin sumar un lugar de jugador.';
+            ? 'Volvés a figurar como jugador.'
+            : 'Quedaste como encargado sin ocupar cupo de jugador.';
 
         return back()->with('ok', $message);
     }
@@ -198,28 +186,25 @@ class GameTableController extends Controller
     /* ========================= Crear / Guardar ========================= */
     public function create(Request $request): ViewContract
     {
-        $this->requireUser($request); // asegura sesión (User) y quita warning
+        $this->requireUser($request);
+
         $managerCandidates = User::query()
             ->select(['id', 'name', 'username', 'email'])
-            ->orderByRaw("COALESCE(NULLIF(name, ''), username, email) ASC")
+            ->orderByRaw("COALESCE(NULLIF(name,''), username, email) ASC")
             ->limit(50)
             ->get();
 
-        return view(
-            $this->pickView(['mesas.create', 'tables.create']),
-            compact('managerCandidates')
-        );
+        return view($this->pickView(['mesas.create', 'tables.create']), compact('managerCandidates'));
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $auth = $this->requireUser($request); // ← User tipado
+        $auth = $this->requireUser($request);
 
         $data = $this->validateTable($request);
         $opensAt = $this->normalizeOpensAt($data['opens_at'] ?? null);
 
-        // archivo > URL
-        $path = $this->storeImageIfAny($request);
+        $path = $this->storeImageIfAny($request);           // archivo > URL
         $imgUrl = $path ? null : ($data['image_url'] ?? null);
 
         $isOpen = (bool) ($data['is_open'] ?? false);
@@ -242,7 +227,8 @@ class GameTableController extends Controller
         ]);
 
         $mesa->touch();
-        return redirect()->route('mesas.show', $mesa)->with('ok', 'Mesa creada');
+
+        return redirect()->route('mesas.show', $mesa)->with('ok', 'Mesa creada.');
     }
 
     /* ========================= Editar / Actualizar ========================= */
@@ -256,23 +242,17 @@ class GameTableController extends Controller
 
         $managerCandidates = User::query()
             ->select(['id', 'name', 'username', 'email'])
-            ->orderByRaw("COALESCE(NULLIF(name, ''), username, email) ASC")
+            ->orderByRaw("COALESCE(NULLIF(name,''), username, email) ASC")
             ->limit(50)
             ->get();
 
         if ($mesa->manager_id && !$managerCandidates->contains('id', $mesa->manager_id)) {
-            $currentManager = User::query()
-                ->select(['id', 'name', 'username', 'email'])
-                ->find($mesa->manager_id);
-            if ($currentManager) {
-                $managerCandidates->push($currentManager);
-            }
+            $current = User::query()->select(['id', 'name', 'username', 'email'])->find($mesa->manager_id);
+            if ($current)
+                $managerCandidates->push($current);
         }
 
-        return view(
-            $this->pickView(['mesas.edit', 'tables.edit']),
-            compact('mesa', 'tz', 'opensAtValue', 'managerCandidates')
-        );
+        return view($this->pickView(['mesas.edit', 'tables.edit']), compact('mesa', 'tz', 'opensAtValue', 'managerCandidates'));
     }
 
     public function update(Request $request, GameTable $mesa): RedirectResponse
@@ -303,7 +283,7 @@ class GameTableController extends Controller
         if ($opensAt && $opensAt->isFuture())
             $isOpen = true;
 
-        $auth = $this->requireUser($request); // ← User tipado
+        $auth = $this->requireUser($request);
         $isOwner = (int) $auth->id === (int) $mesa->created_by;
         $isAdmin = ($auth->role ?? null) === 'admin';
 
@@ -325,25 +305,25 @@ class GameTableController extends Controller
         $mesa->save();
         $mesa->touch();
 
-        return redirect()->route('mesas.show', $mesa)->with('ok', 'Mesa actualizada');
+        return redirect()->route('mesas.show', $mesa)->with('ok', 'Mesa actualizada.');
     }
 
     /* ========================= Eliminar ========================= */
     public function destroy(Request $request, GameTable $mesa): RedirectResponse
     {
-        $this->authorizeMesa($request, $mesa, /*allowManager*/ true);
+        $this->authorizeMesa($request, $mesa, allowManager: true);
 
         if ($mesa->image_path)
             $this->tryDeleteLocal($mesa->image_path);
         $mesa->delete();
 
-        return redirect()->route('home')->with('ok', 'Mesa eliminada');
+        return redirect()->route('home')->with('ok', 'Mesa eliminada.');
     }
 
     /* ========================= Abrir / Cerrar ========================= */
     public function open(Request $request, GameTable $mesa): RedirectResponse
     {
-        $this->authorizeMesa($request, $mesa, /*allowManager*/ true);
+        $this->authorizeMesa($request, $mesa, allowManager: true);
 
         $now = $this->nowTz()->startOfMinute();
         $current = $mesa->opens_at ? $this->toTz($mesa->opens_at, $this->tz()) : null;
@@ -354,27 +334,29 @@ class GameTableController extends Controller
         ])->save();
 
         $mesa->touch();
-        return back()->with('ok', 'Mesa abierta');
+
+        return back()->with('ok', 'Mesa abierta.');
     }
 
     public function close(Request $request, GameTable $mesa): RedirectResponse
     {
-        $this->authorizeMesa($request, $mesa, /*allowManager*/ true);
+        $this->authorizeMesa($request, $mesa, allowManager: true);
 
         $mesa->forceFill(['is_open' => false])->save();
         $mesa->touch();
 
-        return back()->with('ok', 'Mesa cerrada');
+        return back()->with('ok', 'Mesa cerrada.');
     }
 
     /* ========================= Atajos ========================= */
     public function mine(Request $request): RedirectResponse
     {
-        $auth = $this->requireUser($request); // ← User tipado
+        $auth = $this->requireUser($request);
 
         $mesaId = Signup::where('user_id', $auth->id)->value('game_table_id');
-        if (!$mesaId)
+        if (!$mesaId) {
             return redirect()->route('mesas.index')->with('err', 'No estás anotado en ninguna mesa.');
+        }
 
         return redirect()->route('mesas.show', $mesaId);
     }
@@ -382,13 +364,13 @@ class GameTableController extends Controller
     /* ========================= Helpers ========================= */
     private function authorizeMesa(Request $request, GameTable $mesa, bool $allowManager = false): void
     {
-        $auth = $this->requireUser($request); // ← User tipado
+        $auth = $this->requireUser($request);
 
         $isOwner = (int) ($mesa->created_by ?? 0) === (int) $auth->id;
         $isManager = $allowManager && ((int) ($mesa->manager_id ?? 0) === (int) $auth->id);
         $isAdmin = (($auth->role ?? null) === 'admin');
 
-        abort_unless($isOwner || $isManager || $isAdmin, 403);
+        abort_unless($isOwner || $isManager || $isAdmin, 403, 'No tenés permisos para esta acción.');
     }
 
     private function validateTable(Request $request): array
@@ -419,8 +401,6 @@ class GameTableController extends Controller
     }
 
     /**
-     * Información de contexto para el usuario autenticado respecto a una mesa.
-     *
      * @return array{isOwner:bool,isManager:bool,isAdmin:bool,isSigned:bool}
      */
     private function mesaUserContext(?User $auth, GameTable $mesa): array
@@ -461,31 +441,35 @@ class GameTableController extends Controller
         if (!$mesa->is_open)
             return false;
 
-        $opensRaw = $mesa->getAttribute('opens_at');
-        if ($opensRaw === null)
+        $raw = $mesa->getAttribute('opens_at');
+        if ($raw === null)
             return true;
 
-        $openAt = $opensRaw instanceof CarbonInterface
-            ? $opensRaw->copy()->timezone($this->tz())
-            : Carbon::parse((string) $opensRaw, $this->tz());
+        $openAt = $raw instanceof CarbonInterface
+            ? $raw->copy()->timezone($this->tz())
+            : Carbon::parse((string) $raw, $this->tz());
 
         return $this->nowTz()->greaterThanOrEqualTo($openAt);
     }
 
     private function pickView(array $candidates, ?string $fallback = null): string
     {
-        foreach ($candidates as $v)
-            if (View::exists($v))
+        foreach ($candidates as $v) {
+            if (View::exists($v)) {
                 return $v;
-        if ($fallback && View::exists($fallback))
+            }
+        }
+        if ($fallback && View::exists($fallback)) {
             return $fallback;
+        }
         abort(404, 'Ninguna vista encontrada para: ' . implode(', ', $candidates));
     }
 
     private function toTz(null|string|CarbonInterface $dt, string $tz): Carbon
     {
-        if ($dt instanceof CarbonInterface)
+        if ($dt instanceof CarbonInterface) {
             return Carbon::instance($dt)->timezone($tz);
+        }
         return Carbon::parse((string) $dt, $tz);
     }
 }

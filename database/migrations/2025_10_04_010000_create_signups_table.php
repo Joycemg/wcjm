@@ -2,41 +2,103 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void
     {
-        $schema = Schema::connection($this->getConnection());
+        /**
+         * Si tu hosting no soporta/quieres evitar FKs (o usas tablas legacy),
+         * pone en .env: DB_FOREIGN_KEYS=false
+         */
+        $useForeignKeys = (bool) env('DB_FOREIGN_KEYS', true);
 
-        if ($schema->hasTable('signups')) {
-            return;
-        }
-
-        $schema->create('signups', function (Blueprint $table) {
+        Schema::create('signups', function (Blueprint $table) use ($useForeignKeys) {
             $table->id();
 
-            $table->foreignId('game_table_id')->constrained('game_tables')->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            // Relaciones (FKs opcionales)
+            if ($useForeignKeys) {
+                $table->foreignId('game_table_id')
+                    ->constrained('game_tables')
+                    ->cascadeOnDelete(); // borra inscripciones al eliminar mesa
 
-            $table->boolean('is_counted')->default(true);
-            $table->boolean('is_manager')->default(false);
-            $table->boolean('attended')->nullable();
-            $table->string('behavior', 16)->nullable();
+                $table->foreignId('user_id')
+                    ->constrained()
+                    ->cascadeOnDelete(); // borra inscripciones al eliminar usuario
+            } else {
+                $table->unsignedBigInteger('game_table_id')->index();
+                $table->unsignedBigInteger('user_id')->index();
+            }
 
-            $table->timestamp('attendance_confirmed_at')->nullable();
-            $table->foreignId('attendance_confirmed_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamp('no_show_at')->nullable();
-            $table->foreignId('no_show_by')->nullable()->constrained('users')->nullOnDelete();
+            // Evitar duplicados por mesa/usuario (una inscripción activa por mesa)
+            $table->unique(['game_table_id', 'user_id'], 'signups_table_user_unique');
+
+            // Flags
+            $table->boolean('is_counted')->default(true)->index();  // cuenta para capacidad/posición
+            $table->boolean('is_manager')->default(false)->index(); // aparece como encargado en la mesa
+
+            /**
+             * attended: si tu esquema ya la usa como columna real.
+             * Si no la usas, el modelo la derivará de attendance_confirmed_at/no_show_at.
+             * La dejamos nullable para permitir "pendiente".
+             */
+            $table->boolean('attended')->nullable()->index();
+
+            /**
+             * behavior: 'good' | 'regular' | 'bad' | null
+             * Usamos string corta (16) para compatibilidad; validación dura se hace en app.
+             */
+            $table->string('behavior', 16)->nullable()->index();
+
+            // Marcas de honor (compatibles con tu MesaHonorController)
+            $table->timestamp('attendance_confirmed_at')->nullable()->index();
+            $table->unsignedBigInteger('attendance_confirmed_by')->nullable()->index();
+
+            $table->timestamp('no_show_at')->nullable()->index();
+            $table->unsignedBigInteger('no_show_by')->nullable()->index();
+
+            // Extras opcionales por si luego extendés (dejar nullable e indexar si ayuda)
+            $table->string('note', 500)->nullable();                 // pequeña nota interna del manager
+            $table->json('meta')->nullable();                        // payload extensible (clave/valor)
 
             $table->timestamps();
 
-            $table->index('user_id', 'signups_user_id_index');
-            $table->unique(['game_table_id', 'user_id'], 'signups_game_table_id_user_id_unique');
-            $table->index(['game_table_id', 'created_at'], 'signups_game_table_id_created_at_index');
-            $table->index(['game_table_id', 'attended'], 'signups_attendance_lookup_index');
+            /**
+             * Índices para patrones de consulta:
+             *  - position(): (game_table_id, is_counted, created_at, id)
+             *  - recentForTable(): (game_table_id, created_at desc)
+             */
+            $table->index(['game_table_id', 'is_counted', 'created_at', 'id'], 'signups_pos_idx');
+            $table->index(['game_table_id', 'created_at', 'id'], 'signups_recent_idx');
+
+            // Índices auxiliares ya puestos: is_manager, behavior, *_at, *_by
         });
+
+        // (Opcional) CHECK en DB modernas para behavior: 'good'|'regular'|'bad'
+        // Lo envolvemos en try/catch por compatibilidad (MySQL < 8 ignora/enlaza mal CHECK).
+        try {
+            $driver = Schema::getConnection()->getDriverName();
+
+            if ($driver === 'pgsql') {
+                DB::statement(
+                    "ALTER TABLE signups
+                     ADD CONSTRAINT signups_behavior_chk
+                     CHECK (behavior IN ('good','regular','bad') OR behavior IS NULL)"
+                );
+            } elseif ($driver === 'mysql') {
+                // MySQL 8.0+ lo respeta; versiones viejas lo ignoran silenciosamente.
+                DB::statement(
+                    "ALTER TABLE signups
+                     ADD CONSTRAINT signups_behavior_chk
+                     CHECK (behavior IN ('good','regular','bad') OR behavior IS NULL)"
+                );
+            }
+        } catch (\Throwable $e) {
+            // Silenciar para hosting compartido; la app ya valida en el modelo/capa de dominio.
+        }
     }
+
     public function down(): void
     {
         Schema::dropIfExists('signups');

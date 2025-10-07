@@ -5,742 +5,223 @@
 
 @push('head')
     <style>
-        :root {
-            --muted: #6b7280;
-            --maroon: #7b2d26;
-            --border: #e5e7eb;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --muted: #a7b0ba;
-                --border: #2d2f33;
-            }
-        }
-
-        .muted {
-            color: var(--muted)
-        }
-
-        .pill {
-            display: inline-block;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: .15rem .6rem;
-            font-size: .85rem
-        }
-
-        .pill.ok {
-            background: #e7f8f1;
-            color: #065f46;
-            border-color: #a7e6cf
-        }
-
-        .pill.off {
-            background: #f3f4f6;
-            color: #374151
-        }
-
-        .pill.manager {
-            background: #fef3c7;
-            color: #92400e;
-            border-color: #fde68a
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: .2rem .6rem;
-            border-radius: 999px;
-            font-size: .8rem;
-            border: 1px solid var(--border);
-            background: #f3f4f6;
-            color: #374151
-        }
-
-        .status-pill.ok {
-            background: #dcfce7;
-            border-color: #bbf7d0;
-            color: #065f46
-        }
-
-        .status-pill.bad {
-            background: #fee2e2;
-            border-color: #fecaca;
-            color: #991b1b
-        }
-
-        .status-pill.pending {
-            background: #f3f4f6;
-            border-color: #e5e7eb;
-            color: #374151
-        }
-
-        .status-pill.neutral {
-            background: #e0e7ff;
-            border-color: #c7d2fe;
-            color: #312e81
-        }
-
-        .divider {
-            height: 1px;
-            background: var(--border);
-            margin: .75rem 0
-        }
-
-        .ava {
-            width: 24px;
-            height: 24px;
-            border-radius: 999px;
-            object-fit: cover;
-            border: 1px solid var(--border)
-        }
-
-        .table-wrap {
-            overflow: auto
-        }
-
-        table {
+        .cover {
             width: 100%;
-            border-collapse: collapse
-        }
-
-        th,
-        td {
-            padding: .45rem .5rem;
-            border-bottom: 1px solid var(--border);
-            text-align: left
-        }
-
-        .stack {
-            display: flex;
-            flex-direction: column
-        }
-
-        .grid {
-            display: grid;
-            gap: .75rem
-        }
-
-        .g2 {
-            grid-template-columns: 2fr 1fr
-        }
-
-        @media (max-width:860px) {
-            .g2 {
-                grid-template-columns: 1fr
-            }
-        }
-
-        .manager-grid {
-            display: grid;
-            gap: .75rem;
-            margin-top: 1rem
-        }
-
-        .manager-block {
-            display: flex;
-            align-items: center;
-            gap: .75rem
-        }
-
-        .manager-ava {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
+            height: 220px;
+            border-radius: 1rem;
             object-fit: cover;
             border: 1px solid var(--border);
-            background: #f9fafb
+            background: #fafafa
         }
 
-        .manager-meta {
+        .kv {
             display: flex;
-            flex-direction: column;
-            gap: .1rem
-        }
-
-        .manager-actions {
-            display: flex;
-            flex-wrap: wrap;
             gap: .5rem;
-            align-items: center;
+            align-items: center
         }
 
-        .honor-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: .75rem;
-            align-items: flex-end
+        .kv b {
+            font-weight: 600
         }
 
-        .honor-actions label {
-            display: flex;
-            flex-direction: column;
-            gap: .25rem;
-            font-size: .9rem
-        }
-
-        .honor-actions select {
-            min-width: 160px;
-            padding: .35rem .45rem;
-            border-radius: .4rem;
+        .chip {
             border: 1px solid var(--border);
-            background: var(--card);
-            color: inherit
-        }
-
-        .honor-note {
-            font-size: .85rem;
-            color: var(--muted);
-            margin-top: .35rem
-        }
-
-        .honor-form-row td {
-            background: rgba(249, 250, 251, .6)
+            border-radius: 999px;
+            padding: .1rem .55rem;
+            font-size: .75rem
         }
     </style>
 @endpush
 
 @section('content')
-    @php
-        $tz = config('app.display_timezone', config('app.timezone'));
-        $isOpenNow = (bool) $mesa->is_open_now;
-        $signedOther = isset($myMesaId) && $myMesaId && $myMesaId !== $mesa->id;
+    <div class="grid-2">
+        {{-- Columna principal --}}
+        <section class="card">
+            <div class="flex items-start justify-between gap-3 mb-3">
+                <h1 class="text-2xl font-bold">{{ $mesa->title }}</h1>
 
-        $canVoteRoute = \Illuminate\Support\Facades\Route::has('signups.store');
-        $canUnvoteRoute = \Illuminate\Support\Facades\Route::has('signups.destroy');
-        $canOpenRoute = \Illuminate\Support\Facades\Route::has('mesas.open');
-        $canCloseRoute = \Illuminate\Support\Facades\Route::has('mesas.close');
-        $canEditRoute = \Illuminate\Support\Facades\Route::has('mesas.edit');
-        $canDestroyRoute = \Illuminate\Support\Facades\Route::has('mesas.destroy');
-
-        $isOwner = $isOwner ?? false;
-        $isManager = $isManager ?? false;
-        $isAdmin = $isAdmin ?? false;
-
-        if (!$isAdmin) {
-            $u = auth()->user();
-            $isAdmin = $u && (
-                (method_exists($u, 'can') && $u->can('admin')) ||
-                (isset($u->role) && $u->role === 'admin') ||
-                (isset($u->is_admin) && (bool) $u->is_admin)
-            );
-        }
-
-        $canManageHonor = $canManageHonor ?? ($isOwner || $isManager || $isAdmin);
-
-        $manager = $mesa->manager;
-        $creator = $mesa->creator;
-        $defaultAvatar = asset(config('auth.avatars.default', 'images/avatar-default.svg'));
-        $managerAvatar = $manager?->avatar_url ?? $defaultAvatar;
-        $managerVer = optional($manager?->updated_at)->timestamp;
-        if ($managerAvatar && $managerVer) {
-            $managerAvatar .= (\Illuminate\Support\Str::contains($managerAvatar, '?') ? '&' : '?') . 'v=' . $managerVer;
-        }
-
-        $ownerName = $creator?->name ?: ($creator?->username ?: __('Usuario') . ' #' . $mesa->created_by);
-        $ownerProfileUrl = $creator ? route('profile.show', $creator->profile_param ?? $creator) : null;
-
-        $managerName = $manager?->name ?: ($manager?->username ?: ($manager ? __('Usuario') . ' #' . $manager->id : null));
-        $managerProfileUrl = $manager ? route('profile.show', $manager->profile_param ?? $manager) : null;
-        $joinUrl = $mesa->join_url;
-        $managerNote = $mesa->manager_note;
-    @endphp
-
-    {{-- Wrapper con datos para auto-actualizar justo en opens_at --}}
-    <div id="mesa-page"
-         data-mesa-id="{{ $mesa->id }}"
-         data-is-open="{{ $mesa->is_open ? 1 : 0 }}"
-         data-opens-at="{{ $mesa->opens_at ? $mesa->opens_at->toIso8601String() : '' }}">
-
-        <div class="grid g2">
-            <div class="card"
-                 style="padding:1rem">
-                <header class="stack"
-                        style="gap:.25rem">
-                    <h2 style="color:var(--maroon);margin:0">{{ $mesa->title }}</h2>
-
-                    <p class="muted"
-                       style="margin:0"
-                       aria-live="polite">
-                        {{ __('Capacidad') }}:
-                        <strong>{{ (int) $mesa->capacity }}</strong>
-                        ·
-                        {{ __('Estado') }}:
-                        <strong class="{{ $isOpenNow ? 'text-ok' : 'text-off' }}"
-                                style="color:{{ $isOpenNow ? 'var(--maroon)' : 'var(--muted)' }}">
-                            {{ $isOpenNow ? __('Abierta') : __('Cerrada') }}
-                        </strong>
-                    </p>
-
-                    @if($mesa->opens_at)
-                        <p class="muted"
-                           style="margin:0">
-                            {{ __('Apertura programada') }}:
-                            {{ $mesa->opens_at->timezone($tz)->isoFormat('YYYY-MM-DD HH:mm') }}
-                        </p>
-                    @endif
-                </header>
-
-                @if(filled($mesa->description))
-                    <div class="prose"
-                         style="margin-top:.75rem">
-                        {{ $mesa->description }}
-                    </div>
-                @endif
-
-                <div class="manager-grid">
-                    <div class="manager-block">
-                        <img class="manager-ava"
-                             src="{{ $managerAvatar }}"
-                             alt="{{ $managerName ? __('Avatar de :name', ['name' => $managerName]) : __('Avatar por defecto') }}"
-                             width="48"
-                             height="48"
-                             loading="lazy"
-                             decoding="async"
-                             onerror="this.onerror=null;this.src='{{ $defaultAvatar }}'">
-                        <div class="manager-meta">
-                            <strong>{{ __('Encargado') }}</strong>
-                            @if($manager && $managerProfileUrl)
-                                <a href="{{ $managerProfileUrl }}">{{ $managerName }}</a>
-                            @elseif($managerName)
-                                <span>{{ $managerName }}</span>
-                            @else
-                                <span class="muted">{{ __('Sin asignar') }}</span>
-                            @endif
-                            @if($manager && $creator && $manager->id === $creator->id)
-                                <span class="pill manager">{{ __('También creador de la mesa') }}</span>
-                            @endif
-                        </div>
-                    </div>
-
-                    <div class="manager-meta">
-                        <strong>{{ __('Creador') }}</strong>
-                        @if($ownerProfileUrl)
-                            <a href="{{ $ownerProfileUrl }}">{{ $ownerName }}</a>
-                        @else
-                            <span>{{ $ownerName }}</span>
-                        @endif
-                    </div>
-
-                    @if($joinUrl)
-                        <div class="manager-meta">
-                            <strong>{{ __('Enlace de la mesa') }}</strong>
-                            <a href="{{ $joinUrl }}"
-                               target="_blank"
-                               rel="noopener">{{ \Illuminate\Support\Str::limit($joinUrl, 70) }}</a>
-                        </div>
+                <div class="flex items-center gap-2">
+                    @if($mesa->is_open_now)
+                        <span class="chip bg-green-50">Abierta</span>
+                    @else
+                        <span class="chip bg-red-50">Cerrada</span>
                     @endif
 
-                    @if($canViewNotes && \Illuminate\Support\Facades\Route::has('mesas.notes'))
-                        <div class="manager-meta">
-                            <strong>{{ __('Notas internas') }}</strong>
-                            <a class="btn"
-                               style="width:max-content"
-                               href="{{ route('mesas.notes', $mesa) }}">{{ __('Abrir notas privadas') }}</a>
-                        </div>
-                    @endif
-
-                    <p class="honor-note">
-                        💡 {{ __('Quien administra la mesa puede marcar asistencia, ausencias y comportamiento: el honor se actualiza en forma automática.') }}
-                    </p>
-
-                    @if($canManageHonor && filled($managerNote))
-                        <div class="honor-note">
-                            <strong>{{ __('Nota interna') }}:</strong>
-                            {!! nl2br(e($managerNote)) !!}
-                        </div>
-                    @endif
-
-                    @if(($isManager || $isAdmin) && \Illuminate\Support\Facades\Route::has('mesas.manager.playing'))
-                        <div class="manager-meta">
-                            <strong>{{ __('Tu participación como encargado') }}</strong>
-                            <form class="manager-actions"
-                                  method="POST"
-                                  action="{{ route('mesas.manager.playing', $mesa) }}">
-                                @csrf
-                                <input type="hidden" name="playing" value="{{ $managerCountsAsPlayer ? '0' : '1' }}">
-                                <button class="btn {{ $managerCountsAsPlayer ? 'danger' : 'ok' }}" type="submit">
-                                    {{ $managerCountsAsPlayer ? __('No voy a jugar') : __('Volver a jugar') }}
-                                </button>
-                                @if(!$managerCountsAsPlayer)
-                                    <span class="pill off">{{ __('Actualmente figurás solo como encargado') }}</span>
-                                @endif
-                            </form>
-                        </div>
-                    @endif
-                </div>
-
-                <div class="divider"></div>
-
-                <div class="grid"
-                     style="gap:1rem">
-                    {{-- Jugadores --}}
-                    <section class="card"
-                             id="jugadores"
-                             style="padding:1rem">
-                        <h3 style="color:var(--maroon);margin-top:0">
-                            {{ __('Jugadores') }} ({{ $players->count() }}/{{ (int) $mesa->capacity }})
-                        </h3>
-
-                        @if(!$managerCountsAsPlayer)
-                            <p class="muted" style="margin-top:-.25rem">{{ __('El encargado no ocupa un lugar de jugador en esta mesa.') }}</p>
-                        @endif
-
-                        <div class="table-wrap">
-                            <table>
-                                <caption class="sr-only">{{ __('Listado de jugadores') }}</caption>
-                                <thead>
-                                    <tr>
-                                        <th scope="col">#</th>
-                                        <th scope="col">{{ __('Usuario') }}</th>
-                                        <th scope="col">{{ __('Fecha voto') }}</th>
-                                        <th scope="col">{{ __('Asistencia') }}</th>
-                                        <th scope="col">{{ __('Comportamiento') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($players as $i => $s)
-                                        @php
-    $uRow = $s->relationLoaded('user') ? $s->user : null;
-    $name = $uRow?->name ?? $uRow?->username ?? __('Usuario');
-    $avatar = $s->user_avatar_url ?? null;
-    $dt = $s->created_at?->timezone($tz);
-    $attendedStatus = match (true) {
-        $s->attended === true => ['label' => __('Asistió'), 'class' => 'ok'],
-        $s->attended === false => ['label' => __('No asistió'), 'class' => 'bad'],
-        default => ['label' => __('Pendiente'), 'class' => 'pending'],
-    };
-    $behaviorRaw = $s->behavior ?? 'regular';
-    $behaviorStatus = match ($behaviorRaw) {
-        'good' => ['label' => __('Buen comportamiento'), 'class' => 'ok'],
-        'bad' => ['label' => __('Mal comportamiento'), 'class' => 'bad'],
-        default => ['label' => __('Regular'), 'class' => 'neutral'],
-    };
-                                        @endphp
-                                        <tr>
-                                            <td>{{ $i + 1 }}</td>
-                                            <td>
-                                                <span style="display:flex;align-items:center;gap:.5rem">
-                                                    @if($avatar)
-                                                        <img class="ava"
-                                                             src="{{ $avatar }}"
-                                                             alt="{{ $name }}"
-                                                             width="24"
-                                                             height="24"
-                                                             loading="lazy"
-                                                             decoding="async">
-                                                    @endif
-                                                    <span>{{ $name }}</span>
-                                                    @if($s->is_manager)
-                                                        <span class="pill manager">{{ __('Encargado') }}</span>
-                                                    @endif
-                                                </span>
-                                            </td>
-                                            <td>{{ $dt ? $dt->isoFormat('YYYY-MM-DD HH:mm:ss') : '—' }}</td>
-                                            <td>
-                                                <span class="status-pill {{ $attendedStatus['class'] }}">{{ $attendedStatus['label'] }}</span>
-                                            </td>
-                                            <td>
-                                                <span class="status-pill {{ $behaviorStatus['class'] }}">{{ $behaviorStatus['label'] }}</span>
-                                            </td>
-                                        </tr>
-                                        @if($canManageHonor)
-                                            <tr class="honor-form-row">
-                                                <td colspan="5">
-                                                    <form method="POST"
-                                                          action="{{ route('mesas.signups.attendance', [$mesa, $s]) }}">
-                                                        @csrf
-                                                        <div class="honor-actions">
-                                                            <label>
-                                                                {{ __('Asistencia') }}
-                                                                <select name="attended">
-                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
-                                                                    <option value="1" @selected($s->attended === true)>{{ __('Confirmar asistencia (+10)') }}</option>
-                                                                    <option value="0" @selected($s->attended === false)>{{ __('Marcar como ausente') }}</option>
-                                                                </select>
-                                                            </label>
-                                                            <label>
-                                                                {{ __('No show') }}
-                                                                <select name="no_show">
-                                                                    <option value="0" selected>{{ __('No aplicar') }}</option>
-                                                                    <option value="1">{{ __('Marcar No Show (-20)') }}</option>
-                                                                </select>
-                                                            </label>
-                                                            <label>
-                                                                {{ __('Comportamiento') }}
-                                                                <select name="behavior">
-                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
-                                                                    <option value="good" @selected($s->behavior === 'good')>{{ __('Buen comportamiento (+10)') }}</option>
-                                                                    <option value="regular" @selected(($s->behavior ?? 'regular') === 'regular')>{{ __('Regular (0)') }}</option>
-                                                                    <option value="bad" @selected($s->behavior === 'bad')>{{ __('Mal comportamiento (-10)') }}</option>
-                                                                </select>
-                                                            </label>
-                                                            <button class="btn ok"
-                                                                    type="submit">{{ __('Aplicar cambios') }}</button>
-                                                        </div>
-                                                    </form>
-                                                </td>
-                                            </tr>
-                                        @endif
-                                    @empty
-                                        <tr>
-                                            <td colspan="5"
-                                                class="muted">{{ __('Sin votos aún.') }}</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    {{-- Reserva --}}
-                    <section class="card"
-                             id="reserva"
-                             style="padding:1rem">
-                        <h3 style="color:var(--maroon);margin-top:0">
-                            {{ __('Reserva (lista de espera)') }} ({{ $waitlist->count() }})
-                        </h3>
-
-                        <div class="table-wrap">
-                            <table>
-                                <caption class="sr-only">{{ __('Listado de espera') }}</caption>
-                                <thead>
-                                    <tr>
-                                        <th scope="col">#</th>
-                                        <th scope="col">{{ __('Usuario') }}</th>
-                                        <th scope="col">{{ __('Fecha voto') }}</th>
-                                        <th scope="col">{{ __('Asistencia') }}</th>
-                                        <th scope="col">{{ __('Comportamiento') }}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @forelse($waitlist as $i => $s)
-                                        @php
-    $uRow = $s->relationLoaded('user') ? $s->user : null;
-    $name = $uRow?->name ?? $uRow?->username ?? __('Usuario');
-    $avatar = $s->user_avatar_url ?? null;
-    $dt = $s->created_at?->timezone($tz);
-    $attendedStatus = match (true) {
-        $s->attended === true => ['label' => __('Asistió'), 'class' => 'ok'],
-        $s->attended === false => ['label' => __('No asistió'), 'class' => 'bad'],
-        default => ['label' => __('Pendiente'), 'class' => 'pending'],
-    };
-    $behaviorRaw = $s->behavior ?? 'regular';
-    $behaviorStatus = match ($behaviorRaw) {
-        'good' => ['label' => __('Buen comportamiento'), 'class' => 'ok'],
-        'bad' => ['label' => __('Mal comportamiento'), 'class' => 'bad'],
-        default => ['label' => __('Regular'), 'class' => 'neutral'],
-    };
-                                        @endphp
-                                        <tr>
-                                            <td>{{ $i + 1 }}</td>
-                                            <td>
-                                                <span style="display:flex;align-items:center;gap:.5rem">
-                                                    @if($avatar)
-                                                        <img class="ava"
-                                                             src="{{ $avatar }}"
-                                                             alt="{{ $name }}"
-                                                             width="24"
-                                                             height="24"
-                                                             loading="lazy"
-                                                             decoding="async">
-                                                    @endif
-                                                    <span>{{ $name }}</span>
-                                                </span>
-                                            </td>
-                                            <td>{{ $dt ? $dt->isoFormat('YYYY-MM-DD HH:mm:ss') : '—' }}</td>
-                                            <td>
-                                                <span class="status-pill {{ $attendedStatus['class'] }}">{{ $attendedStatus['label'] }}</span>
-                                            </td>
-                                            <td>
-                                                <span class="status-pill {{ $behaviorStatus['class'] }}">{{ $behaviorStatus['label'] }}</span>
-                                            </td>
-                                        </tr>
-                                        @if($canManageHonor)
-                                            <tr class="honor-form-row">
-                                                <td colspan="5">
-                                                    <form method="POST"
-                                                          action="{{ route('mesas.signups.attendance', [$mesa, $s]) }}">
-                                                        @csrf
-                                                        <div class="honor-actions">
-                                                            <label>
-                                                                {{ __('Asistencia') }}
-                                                                <select name="attended">
-                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
-                                                                    <option value="1" @selected($s->attended === true)>{{ __('Confirmar asistencia (+10)') }}</option>
-                                                                    <option value="0" @selected($s->attended === false)>{{ __('Marcar como ausente') }}</option>
-                                                                </select>
-                                                            </label>
-                                                            <label>
-                                                                {{ __('No show') }}
-                                                                <select name="no_show">
-                                                                    <option value="0" selected>{{ __('No aplicar') }}</option>
-                                                                    <option value="1">{{ __('Marcar No Show (-20)') }}</option>
-                                                                </select>
-                                                            </label>
-                                                            <label>
-                                                                {{ __('Comportamiento') }}
-                                                                <select name="behavior">
-                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
-                                                                    <option value="good" @selected($s->behavior === 'good')>{{ __('Buen comportamiento (+10)') }}</option>
-                                                                    <option value="regular" @selected(($s->behavior ?? 'regular') === 'regular')>{{ __('Regular (0)') }}</option>
-                                                                    <option value="bad" @selected($s->behavior === 'bad')>{{ __('Mal comportamiento (-10)') }}</option>
-                                                                </select>
-                                                            </label>
-                                                            <button class="btn ok"
-                                                                    type="submit">{{ __('Aplicar cambios') }}</button>
-                                                        </div>
-                                                    </form>
-                                                </td>
-                                            </tr>
-                                        @endif
-                                    @empty
-                                        <tr>
-                                            <td colspan="5"
-                                                class="muted">{{ __('Vacía') }}</td>
-                                        </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
+                    <span class="chip">Capacidad: {{ $mesa->capacity }}</span>
+                    <span class="chip">Ocupación: {{ $mesa->occupancy_percent }}%</span>
                 </div>
             </div>
 
-            <aside class="card"
-                   style="padding:1rem">
-                <h3 style="color:var(--maroon);margin-top:0">{{ __('Acciones') }}</h3>
+            @php
+                $img = $mesa->image_url_resolved;
+            @endphp
+            @if($img)
+                <img src="{{ $img }}"
+                     alt="Imagen de {{ $mesa->title }}"
+                     class="cover mb-3">
+            @endif
 
-                @auth
-                    @if($isOpenNow)
-                        @if(!$alreadySigned)
-                            @if ($canVoteRoute)
-                                <form method="POST"
-                                      action="{{ route('signups.store', $mesa) }}">
-                                    @csrf
-                                    <button class="btn ok"
-                                            style="width:100%"
-                                            {{ $signedOther ? 'disabled' : '' }}
-                                            aria-disabled="{{ $signedOther ? 'true' : 'false' }}"
-                                            @if($signedOther)
-                                                title="{{ __('Ya votaste en otra mesa') }}"
-                                            @endif>
-                                        🗳️ {{ __('Votar / Reservar') }}
-                                    </button>
-                                </form>
-                            @endif
-                            @if($signedOther)
-                                <p class="muted"
-                                   style="margin-top:.4rem">
-                                    {{ __('Ya votaste en otra mesa. Retirá tu voto allí para votar aquí.') }}
-                                </p>
-                            @endif
-                        @else
-                            @if ($canUnvoteRoute)
-                                <form method="POST"
-                                      action="{{ route('signups.destroy', $mesa) }}">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn danger"
-                                            style="width:100%">✖ {{ __('Retirar voto') }}</button>
-                                </form>
-                            @endif
-                        @endif
-                    @else
-                        <p class="muted">{{ __('La mesa aún no está abierta para votar.') }}</p>
+            @if($mesa->description)
+                <p class="prose max-w-none mb-4">{{ $mesa->description }}</p>
+            @else
+                <p class="muted mb-4">Sin descripción.</p>
+            @endif
+
+            @if(!empty($mesa->join_url))
+                <p class="mb-4">
+                    <a class="btn green"
+                       href="{{ $mesa->join_url }}"
+                       target="_blank"
+                       rel="nofollow noopener">🚪 Unirse / Link externo</a>
+                </p>
+            @endif
+
+            {{-- Gestión rápida (solo quien corresponde) --}}
+            <div class="flex flex-wrap gap-2 mb-2">
+                @can('manage-tables')
+                    @if(Route::has('mesas.edit'))
+                        <a class="btn"
+                           href="{{ route('mesas.edit', $mesa) }}">✏️ Editar</a>
                     @endif
-                @else
-                    <p class="muted">{{ __('Iniciá sesión para votar.') }}</p>
-                @endauth
 
-                {{-- Admin --}}
-                @if ($isAdmin)
-                    <div class="divider"></div>
-                    <h4 style="margin:.1rem 0 .5rem;color:#b08900">{{ __('Administrador') }}</h4>
+                    @if($mesa->is_open)
+                        <form method="post"
+                              action="{{ route('mesas.close', $mesa) }}">
+                            @csrf
+                            <button class="btn red"
+                                    type="submit">🔒 Cerrar</button>
+                        </form>
+                    @else
+                        <form method="post"
+                              action="{{ route('mesas.open', $mesa) }}">
+                            @csrf
+                            <button class="btn green"
+                                    type="submit">🔓 Abrir</button>
+                        </form>
+                    @endif
 
-                    <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-                        @if ($canOpenRoute)
-                            <form method="POST"
-                                  action="{{ route('mesas.open', $mesa) }}"
-                                  style="display:inline">
-                                @csrf
-                                <button class="btn ok"
-                                        {{ $isOpenNow ? 'disabled' : '' }}
-                                        aria-disabled="{{ $isOpenNow ? 'true' : 'false' }}">
-                                    {{ __('Abrir') }}
-                                </button>
-                            </form>
-                        @endif
+                    @if(Route::has('mesas.notes'))
+                        <a class="btn"
+                           href="{{ route('mesas.notes', $mesa) }}">🗒️ Notas</a>
+                    @endif
+                @endcan
+            </div>
 
-                        @if ($canCloseRoute)
-                            <form method="POST"
-                                  action="{{ route('mesas.close', $mesa) }}"
-                                  style="display:inline">
-                                @csrf
-                                <button class="btn danger"
-                                        {{ $isOpenNow ? '' : 'disabled' }}
-                                        aria-disabled="{{ $isOpenNow ? 'false' : 'true' }}">
-                                    {{ __('Cerrar') }}
-                                </button>
-                            </form>
-                        @endif
+            {{-- Listado de jugadores y espera --}}
+            <div class="grid gap-4 md:grid-cols-2 mt-4">
+                <div>
+                    <h2 class="font-semibold mb-2">🎲 Jugadores ({{ $players->count() }}/{{ $mesa->capacity }})</h2>
+                    @forelse($players as $s)
+                        <article class="flex items-center gap-3 py-2 border-b">
+                            <img class="avatar"
+                                 src="{{ $s->user_avatar_url }}"
+                                 alt="avatar">
+                            <div class="min-w-0">
+                                <div class="truncate">{{ $s->user_display_name ?? 'Usuario' }}</div>
+                                <div class="text-xs muted">{{ $s->created_ago ?? '' }}</div>
+                            </div>
+                            @if((bool) ($s->is_manager ?? false))
+                                <span class="pill">Encargado</span>
+                            @endif
+                        </article>
+                    @empty
+                        <p class="muted">No hay jugadores por ahora.</p>
+                    @endforelse
+                </div>
 
-                        @if ($canEditRoute)
-                            <a class="btn"
-                               href="{{ route('mesas.edit', $mesa) }}">✏️ {{ __('Editar') }}</a>
-                        @endif
+                <div>
+                    <h2 class="font-semibold mb-2">🕒 Lista de espera ({{ $waitlist->count() }})</h2>
+                    @forelse($waitlist as $s)
+                        <article class="flex items-center gap-3 py-2 border-b">
+                            <img class="avatar"
+                                 src="{{ $s->user_avatar_url }}"
+                                 alt="avatar">
+                            <div class="min-w-0">
+                                <div class="truncate">{{ $s->user_display_name ?? 'Usuario' }}</div>
+                                <div class="text-xs muted">{{ $s->created_ago ?? '' }}</div>
+                            </div>
+                        </article>
+                    @empty
+                        <p class="muted">Sin lista de espera.</p>
+                    @endforelse
+                </div>
+            </div>
+        </section>
 
-                        @if ($canDestroyRoute)
-                            <form method="POST"
-                                  action="{{ route('mesas.destroy', $mesa) }}"
-                                  onsubmit="return confirm('{{ __('¿Eliminar mesa?') }}')"
-                                  style="display:inline">
-                                @csrf @method('DELETE')
-                                <button class="btn danger">🗑️ {{ __('Eliminar') }}</button>
-                            </form>
-                        @endif
+        {{-- Columna lateral --}}
+        <aside class="card">
+            <h3 class="font-semibold mb-3">Detalles</h3>
+
+            <div class="space-y-2">
+                <div class="kv"><b>Estado:</b>
+                    <span>{{ $mesa->is_open_now ? 'Abierta ahora' : ($mesa->is_open ? 'Abre más tarde' : 'Cerrada') }}</span>
+                </div>
+
+                @if($mesa->opens_at)
+                    <div class="kv"><b>Abre:</b>
+                        <span>{{ $mesa->opens_at->timezone(config('app.display_timezone', config('app.timezone', 'UTC')))->format('Y-m-d H:i') }}</span>
                     </div>
                 @endif
-            </aside>
-        </div>
+
+                <div class="kv"><b>Encargado:</b>
+                    @if($mesa->manager)
+                        <span>{{ $mesa->manager->name ?? $mesa->manager->username ?? $mesa->manager->email ?? '—' }}</span>
+                    @else
+                        <span class="muted">—</span>
+                    @endif
+                </div>
+
+                <div class="kv"><b>Creador:</b>
+                    @if($mesa->creator)
+                        <span>{{ $mesa->creator->name ?? $mesa->creator->username ?? $mesa->creator->email ?? '—' }}</span>
+                    @else
+                        <span class="muted">—</span>
+                    @endif
+                </div>
+
+                @if($managerCountsAsPlayer)
+                    <div class="kv"><b>Encargado cuenta como jugador:</b> <span>Sí</span></div>
+                @else
+                    <div class="kv"><b>Encargado cuenta como jugador:</b> <span>No</span></div>
+                @endif
+
+                <div class="kv"><b>Inscripciones:</b>
+                    <span>{{ $mesa->seats_taken }} / {{ $mesa->capacity }}</span>
+                </div>
+
+                @if($canViewNotes && !empty($mesa->manager_note))
+                    <div class="mt-4">
+                        <h4 class="font-semibold">Nota del encargado</h4>
+                        <p class="mt-1">{{ $mesa->manager_note }}</p>
+                    </div>
+                @endif
+            </div>
+
+            {{-- Acciones del usuario (ejemplo) --}}
+            <div class="mt-4">
+                @auth
+                    @if($alreadySigned)
+                        <form method="post"
+                              action="{{ route('signups.destroy', $mesa) }}">
+                            @csrf @method('DELETE')
+                            <button class="btn red"
+                                    type="submit">❌ Retirarme</button>
+                        </form>
+                    @else
+                        <form method="post"
+                              action="{{ route('signups.store', $mesa) }}">
+                            @csrf
+                            <button class="btn green"
+                                    type="submit"
+                                    @disabled($mesa->is_full && !$mesa->is_open_now)>
+                                ✅ Anotarme
+                            </button>
+                        </form>
+                    @endif
+                @else
+                    <p class="muted text-sm">Iniciá sesión para anotarte.</p>
+                @endauth
+            </div>
+        </aside>
     </div>
 @endsection
-
-{{-- ⚠️ Asegurate de tener @stack('scripts') antes de </body> en layouts.app --}}
-@push('scripts')
-    <script>
-        (function () {
-            const el = document.getElementById('mesa-page');
-            if (!el) return;
-
-            const isOpen = +el.dataset.isOpen === 1;
-            const opensISO = el.dataset.opensAt || '';
-            const toMs = iso => iso ? new Date(iso).getTime() : null;
-            const now = () => Date.now();
-
-            const opensMs = toMs(opensISO);
-
-            // 1) Reload preciso al llegar a opens_at si la mesa está "is_open"
-            if (isOpen && opensMs && opensMs > now()) {
-                const lead = Math.max(0, opensMs - now() + 300); // tolerancia
-                setTimeout(() => window.location.reload(), lead);
-                setTimeout(() => window.location.reload(), lead + 2000); // aftershock por suspensión de pestaña
-            }
-
-            // 2) Volver a foco: si ya pasó la hora, recargar
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible' && isOpen && opensMs && opensMs <= now()) {
-                    window.location.reload();
-                }
-            });
-
-            // 3) Respaldo ocasional (no es polling constante)
-            const iv = setInterval(() => {
-                if (isOpen && opensMs && opensMs <= now()) window.location.reload();
-            }, 5 * 60 * 1000);
-            window.addEventListener('beforeunload', () => clearInterval(iv));
-        })();
-    </script>
-@endpush

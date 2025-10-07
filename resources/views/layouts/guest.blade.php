@@ -3,16 +3,66 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
+    @php
+        // === Props del componente (atributos HTML) ===
+        $title = $attributes->get('title', config('app.name', 'La Taberna'));
+        $description = $attributes->get('description');
+        $canonical = $attributes->get('canonical');
+        $image = $attributes->get('image', asset('images/og-default.png'));
+        $bodyClass = trim((string) $attributes->get('body-class', ''));
+        $noindexRaw = $attributes->get('noindex', true);
+        $noindex = filter_var($noindexRaw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $noindex = $noindex === null ? true : $noindex; // default true
+
+        $appName = config('app.name', 'La Taberna');
+        $fullTitle = $title ? ($title . ' · ' . $appName) : $appName;
+        $descFinal = $description ? \Illuminate\Support\Str::limit(strip_tags($description), 160, '') : $appName;
+
+        // Cache-busting para el logo (opcional, no rompe si falta el archivo)
+        $logoPath = public_path('images/logo.png');
+        $logoVer = file_exists($logoPath) ? filemtime($logoPath) : null;
+        $logoHref = asset('images/logo.png') . ($logoVer ? ('?v=' . $logoVer) : '');
+    @endphp
+
     <meta charset="utf-8">
-    <title>{{ config('app.name', 'La Taberna') }}</title>
+    <title>{{ $fullTitle }}</title>
     <meta name="viewport"
           content="width=device-width, initial-scale=1">
     <meta name="csrf-token"
           content="{{ csrf_token() }}">
+    <meta name="color-scheme"
+          content="light">
+    @if($descFinal)
+        <meta name="description"
+      content="{{ $descFinal }}">@endif
+    <meta name="robots"
+          content="{{ $noindex ? 'noindex,nofollow' : 'index,follow' }}">
+    <link rel="canonical"
+          href="{{ $canonical ?: url()->current() }}">
 
-    {{-- (Opcional) Hora del servidor en UTC ms si querés usar window.mesasNowMs() en páginas guest --}}
+    {{-- Hora del servidor en UTC ms (para sync de timers si querés usar window.mesasNowMs()) --}}
     <meta name="server-now-ms"
           content="{{ now('UTC')->valueOf() }}">
+
+    {{-- Open Graph / Twitter (estático y liviano) --}}
+    <meta property="og:type"
+          content="website">
+    <meta property="og:title"
+          content="{{ $fullTitle }}">
+    <meta property="og:description"
+          content="{{ $descFinal }}">
+    <meta property="og:url"
+          content="{{ url()->current() }}">
+    <meta property="og:image"
+          content="{{ \Illuminate\Support\Str::startsWith($image, ['http://', 'https://']) ? $image : url($image) }}">
+    <meta name="twitter:card"
+          content="summary_large_image">
+    <meta name="twitter:title"
+          content="{{ $fullTitle }}">
+    <meta name="twitter:description"
+          content="{{ $descFinal }}">
+    <meta name="twitter:image"
+          content="{{ \Illuminate\Support\Str::startsWith($image, ['http://', 'https://']) ? $image : url($image) }}">
 
     <style>
         :root {
@@ -115,30 +165,30 @@
 
         .auth-header {
             margin-bottom: 1rem;
-            text-align: center;
+            text-align: center
         }
 
         .auth-title {
             margin: 0;
             color: var(--maroon);
             font-size: clamp(1.35rem, 4vw, 1.75rem);
-            font-weight: 700;
+            font-weight: 700
         }
 
         .form-grid {
             display: grid;
-            gap: 1rem;
+            gap: 1rem
         }
 
         .form-field {
             display: grid;
-            gap: .35rem;
+            gap: .35rem
         }
 
         .form-label {
             font-weight: 600;
             font-size: .95rem;
-            color: var(--muted);
+            color: var(--muted)
         }
 
         .form-control {
@@ -155,11 +205,11 @@
         .form-control:focus {
             border-color: var(--gold);
             outline: none;
-            box-shadow: 0 0 0 3px var(--focus);
+            box-shadow: 0 0 0 3px var(--focus)
         }
 
         .password-wrap {
-            position: relative;
+            position: relative
         }
 
         .pass-toggle {
@@ -177,21 +227,21 @@
 
         .pass-toggle:focus-visible {
             outline: 3px solid var(--focus);
-            outline-offset: 2px;
+            outline-offset: 2px
         }
 
         .form-hint {
             font-size: .85rem;
             color: var(--muted);
-            margin-top: .25rem;
+            margin-top: .25rem
         }
 
         .form-hint-warning {
-            color: #92400e;
+            color: #92400e
         }
 
         .is-hidden {
-            display: none !important;
+            display: none !important
         }
 
         .form-check label {
@@ -199,7 +249,7 @@
             align-items: center;
             gap: .5rem;
             font-size: .95rem;
-            color: var(--muted);
+            color: var(--muted)
         }
 
         .form-check input[type="checkbox"] {
@@ -207,12 +257,12 @@
             height: 18px;
             border: 1px solid var(--line);
             border-radius: .35rem;
-            accent-color: var(--maroon);
+            accent-color: var(--maroon)
         }
 
         .form-check input[type="checkbox"]:focus-visible {
             outline: 3px solid var(--focus);
-            outline-offset: 2px;
+            outline-offset: 2px
         }
 
         .form-actions {
@@ -221,26 +271,26 @@
             gap: .75rem;
             flex-wrap: wrap;
             align-items: center;
-            margin-top: .25rem;
+            margin-top: .25rem
         }
 
         .form-actions-end {
             display: inline-flex;
             gap: .6rem;
             align-items: center;
-            flex-wrap: wrap;
+            flex-wrap: wrap
         }
 
         .form-links {
             display: flex;
             flex-direction: column;
-            gap: .35rem;
+            gap: .35rem
         }
 
         .form-link {
             color: var(--maroon);
             text-decoration: underline;
-            font-size: .9rem;
+            font-size: .9rem
         }
 
         .form-alert {
@@ -248,34 +298,34 @@
             padding: .75rem .9rem;
             border-radius: .75rem;
             border: 1px solid var(--line);
-            background: #fff;
+            background: #fff
         }
 
         .form-alert ul {
             margin: .35rem 0 0 1.1rem;
-            padding: 0;
+            padding: 0
         }
 
         .form-alert-title {
             display: block;
             font-weight: 600;
-            margin-bottom: .35rem;
+            margin-bottom: .35rem
         }
 
         .form-alert-info {
             background: #E9F7EF;
             border-color: #BFE6CA;
-            color: #166534;
+            color: #166534
         }
 
         .form-alert-error {
             background: #FCECEC;
             border-color: #F3B9B9;
-            color: #7f1d1d;
+            color: #7f1d1d
         }
 
         .form-status {
-            font-size: .9rem;
+            font-size: .9rem
         }
 
         .form-error {
@@ -283,28 +333,37 @@
             color: #7f1d1d;
             font-size: .85rem;
             list-style: disc;
-            padding-left: 1.1rem;
+            padding-left: 1.1rem
         }
 
-        .form-error li + li {
-            margin-top: .25rem;
+        .form-error li+li {
+            margin-top: .25rem
         }
     </style>
 
-    {{-- Head específico por página guest (si lo necesitás) --}}
+    {{-- Head extra específico por página guest (si lo necesitás) --}}
     @stack('head')
 </head>
 
-<body>
+<body class="{{ $bodyClass }}">
+    <a href="#main"
+       class="sr-only">Saltar al contenido</a>
+
     <div class="wrap"
-         role="main">
+         role="main"
+         id="main"
+         tabindex="-1"
+         aria-label="Contenido principal">
         <a class="brand"
-           href="{{ route('home') }}">
-            <img src="{{ asset('images/logo.png') }}"
-                 alt="{{ config('app.name', 'La Taberna') }}"
+           href="{{ route('home') }}"
+           aria-label="Ir al inicio">
+            <img src="{{ $logoHref }}"
+                 alt="{{ $appName }}"
                  loading="lazy"
-                 decoding="async">
-            <span>{{ config('app.name', 'La Taberna') }}</span>
+                 decoding="async"
+                 width="64"
+                 height="64">
+            <span>{{ $appName }}</span>
         </a>
 
         {{-- Mensajes genéricos opcionales (status/ok/err) --}}

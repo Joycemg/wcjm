@@ -1,8 +1,55 @@
 {{-- resources/views/mesas/edit.blade.php --}}
 @extends('layouts.app')
+
 @section('title', __('Editar mesa') . ' · ' . config('app.name', 'La Taberna'))
 
+@push('head')
+    <style>
+        :root {
+            --muted: #6b7280;
+            --maroon: #7b2d26;
+            --border: #e5e7eb
+        }
+
+        .muted {
+            color: var(--muted)
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: .75rem;
+            padding: 1rem
+        }
+
+        .btn {
+            display: inline-flex;
+            gap: .5rem;
+            align-items: center;
+            border: 1px solid var(--border);
+            border-radius: .6rem;
+            padding: .5rem .9rem
+        }
+
+        .btn.ok {
+            background: #dcfce7;
+            border-color: #22c55e
+        }
+
+        .btn.danger {
+            background: #fee2e2;
+            border-color: #ef4444
+        }
+    </style>
+@endpush
+
 @section('content')
+    @php
+        $tz = $tz ?? config('app.display_timezone', config('app.timezone', 'UTC'));
+        // $opensAtValue viene del controller (GameTableController@edit)
+        $managerCandidates = collect($managerCandidates ?? []);
+    @endphp
+
     <div class="card">
         <h2 style="color:var(--maroon);margin-top:0">{{ __('Editar mesa') }}</h2>
 
@@ -23,7 +70,8 @@
               class="grid"
               novalidate>
             @csrf
-            @method('PATCH')
+            {{-- ¡IMPORTANTE! Tu ruta es PUT, no PATCH --}}
+            @method('PUT')
 
             {{-- Título --}}
             <div>
@@ -70,10 +118,6 @@
                 @error('capacity') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            @php
-                $managerCandidates = collect($managerCandidates ?? []);
-            @endphp
-
             {{-- Descripción --}}
             <div style="grid-column:1/-1">
                 <label for="description">{{ __('Descripción') }}</label>
@@ -94,7 +138,7 @@
                 @error('description') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Link para unirse / manual --}}
+            {{-- Link --}}
             <div>
                 <label for="join_url">{{ __('Enlace para la mesa (opcional)') }}</label>
                 <input id="join_url"
@@ -108,11 +152,11 @@
                            aria-invalid="true"
                        @enderror>
                 <small id="join_url_help"
-                       class="muted">{{ __('Guardá un enlace directo a la sesión (Discord, Roll20, Foundry, etc.).') }}</small>
+                       class="muted">{{ __('Guardá un enlace directo (Discord, Roll20, Foundry, etc.).') }}</small>
                 @error('join_url') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Encargado / dueño de mesa --}}
+            {{-- Encargado --}}
             <div>
                 <label for="manager_id">{{ __('Encargado de la mesa (opcional)') }}</label>
                 <input id="manager_id"
@@ -128,17 +172,13 @@
                            aria-invalid="true"
                        @enderror>
                 <small id="manager_help"
-                       class="muted">{{ __('Podés tipear el ID directamente o elegirlo de la lista de usuarios recientes.') }}</small>
+                       class="muted">{{ __('Tipeá el ID o elegilo de la lista de usuarios recientes.') }}</small>
                 @error('manager_id') <div class="text-danger">{{ $message }}</div> @enderror
 
                 <datalist id="manager-candidates">
                     @foreach($managerCandidates as $candidate)
                         @php
-                            $label = trim(collect([
-                                $candidate->name,
-                                $candidate->username ? '@' . $candidate->username : null,
-                                $candidate->email,
-                            ])->filter()->implode(' · '));
+                            $label = trim(collect([$candidate->name, $candidate->username ? '@' . $candidate->username : null, $candidate->email])->filter()->implode(' · '));
                             $label = $label !== '' ? $label : 'ID ' . $candidate->id;
                         @endphp
                         <option value="{{ $candidate->id }}"
@@ -147,9 +187,9 @@
                 </datalist>
             </div>
 
-            {{-- Nota privada para el encargado --}}
+            {{-- Nota privada --}}
             <div style="grid-column:1/-1">
-                <label for="manager_note">{{ __('Nota interna para el encargado (opcional)') }}</label>
+                <label for="manager_note">{{ __('Nota interna (opcional)') }}</label>
                 <textarea id="manager_note"
                           name="manager_note"
                           rows="3"
@@ -168,11 +208,15 @@
                 <label>{{ __('Imagen actual') }}</label>
                 <div class="muted"
                      style="margin-bottom:.4rem">
-                    @if (!empty($mesa->image_url))
+                    @if (!empty($mesa->image_url_resolved))
                         <img id="image-current"
-                             src="{{ $mesa->image_url }}"
+                             src="{{ $mesa->image_url_resolved }}"
                              alt="{{ __('Imagen de :title', ['title' => $mesa->title]) }}"
-                             style="display:block;max-width:220px;height:auto;border-radius:.5rem;object-fit:cover">
+                             style="display:block;max-width:220px;height:auto;border-radius:.5rem;object-fit:cover"
+                             loading="lazy"
+                             decoding="async"
+                             width="220"
+                             height="124">
                     @else
                         <span id="image-current-none">{{ __('Sin imagen') }}</span>
                     @endif
@@ -188,14 +232,12 @@
                            aria-invalid="true"
                        @enderror>
                 <small id="image_help"
-                       class="muted">
-                    {{ __('Usá JPG/PNG/WebP. Tamaño máx. 2MB. Recomendado 16:9 (p. ej. 1280×720).') }}
-                </small>
+                       class="muted">{{ __('JPG/PNG/WebP, máx. 2MB, 16:9 recomendado.') }}</small>
                 <div id="image_note"
                      class="muted"
                      style="font-size:.85rem;margin-top:.25rem"></div>
 
-                @if (!empty($mesa->image_url))
+                @if (!empty($mesa->image_path) || !empty($mesa->image_url))
                     <div style="margin-top:.4rem">
                         <label style="display:flex;gap:.4rem;align-items:center">
                             <input id="remove_image"
@@ -210,7 +252,7 @@
                 @error('image') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
-            {{-- Apertura manual --}}
+            {{-- Estado --}}
             <div>
                 <input type="hidden"
                        name="is_open"
@@ -224,8 +266,7 @@
                            {{ old('is_open', $mesa->is_open) ? 'checked' : '' }}>
                     <span>{{ __('Abrir manualmente') }}</span>
                 </label>
-                <small
-                       class="muted">{{ __('Si hay apertura futura, quedará lista para autoabrir a la hora programada.') }}</small>
+                <small class="muted">{{ __('Si hay apertura futura, autoabrirá a la hora programada.') }}</small>
                 @error('is_open') <div class="text-danger">{{ $message }}</div> @enderror
             </div>
 
@@ -242,9 +283,7 @@
                            aria-invalid="true"
                        @enderror>
                 <small id="opens_help"
-                       class="muted">
-                    {{ __('Proponemos HOY 10:15 (:tz). Podés cambiarlo.', ['tz' => $tz]) }}
-                </small>
+                       class="muted">{{ __('Proponemos HOY 10:15 (:tz).', ['tz' => $tz]) }}</small>
                 <div id="opens_hint"
                      class="muted"
                      style="font-size:.85rem"></div>
@@ -273,7 +312,8 @@
             </div>
         </form>
 
-        <div class="divider"></div>
+        <div class="divider"
+             style="margin:1rem 0;border-top:1px solid var(--border)"></div>
 
         {{-- Eliminar --}}
         @if (Route::has('mesas.destroy'))
@@ -295,129 +335,48 @@
             (() => {
                 const $ = (id) => document.getElementById(id);
 
-                // ==== Contadores accesibles ====
+                // Contadores
                 const bindCounter = (input, outId) => {
-                    const out = $(outId);
-                    if (!input || !out) return;
+                    const out = $(outId); if (!input || !out) return;
                     const max = Number(input.getAttribute('maxlength') || '0') || null;
-                    const update = () => {
-                        const len = (input.value || '').length;
-                        out.textContent = max ? `${len}/${max}` : `${len}`;
-                    };
-                    input.addEventListener('input', update, { passive: true });
-                    update();
+                    const update = () => { const len = (input.value || '').length; out.textContent = max ? `${len}/${max}` : `${len}`; };
+                    input.addEventListener('input', update, { passive: true }); update();
                 };
                 bindCounter($('title'), 'title_count');
                 bindCounter($('description'), 'description_count');
 
-                // ==== Imagen: validación tamaño + preview ====
-                const MAX_BYTES = 2 * 1024 * 1024; // 2MB
-                const inputImage = $('image');
-                const noteImage = $('image_note');
-                const chkRemove = $('remove_image');
-
-                function clearFile() {
-                    if (!inputImage) return;
-                    inputImage.value = '';
-                    inputImage.setCustomValidity('');
-                    if (noteImage) noteImage.textContent = '';
-                    // Restaurar preview si había actual
-                    const cur = document.getElementById('image-current');
-                    const none = document.getElementById('image-current-none');
-                    if (cur) cur.style.display = 'block';
-                    if (none) none.style.display = '';
-                }
-
-                function handleRemoveToggle() {
-                    if (!inputImage || !chkRemove) return;
-                    const on = chkRemove.checked;
-                    inputImage.disabled = on;
-                    if (on) clearFile();
-                }
-                chkRemove?.addEventListener('change', handleRemoveToggle, { passive: true });
-                handleRemoveToggle();
+                // Imagen (2MB) + quitar
+                const MAX_BYTES = 2 * 1024 * 1024;
+                const inputImage = $('image'), noteImage = $('image_note'), chkRemove = $('remove_image');
+                function clearFile() { if (!inputImage) return; inputImage.value = ''; inputImage.setCustomValidity(''); if (noteImage) noteImage.textContent = ''; }
+                function handleRemoveToggle() { if (!inputImage || !chkRemove) return; const on = chkRemove.checked; inputImage.disabled = on; if (on) clearFile(); }
+                chkRemove?.addEventListener('change', handleRemoveToggle, { passive: true }); handleRemoveToggle();
 
                 inputImage?.addEventListener('change', (e) => {
                     const f = e.target.files?.[0];
                     if (!f) { inputImage.setCustomValidity(''); if (noteImage) noteImage.textContent = ''; return; }
-
-                    if (f.size > MAX_BYTES) {
-                        inputImage.setCustomValidity(@json(__('La imagen supera 2 MB.')));
-                        if (noteImage) noteImage.textContent = @json(__('Archivo demasiado grande (máx. 2 MB).'));
-                    } else {
-                        inputImage.setCustomValidity('');
-                        if (noteImage) noteImage.textContent = '';
-                    }
-
-                    // Preview rápida
-                    const cur = document.getElementById('image-current');
-                    const none = document.getElementById('image-current-none');
-                    const url = URL.createObjectURL(f);
-                    if (cur) {
-                        cur.src = url;
-                        cur.style.display = 'block';
-                        none && (none.style.display = 'none');
-                        // liberar objeto al enviar o al limpiar
-                        inputImage.addEventListener('formdata', () => URL.revokeObjectURL(url), { once: true });
-                    } else if (none) {
-                        none.style.display = 'none';
-                    }
-                }, { passive: false });
-
-                // ==== Apertura programada: atajos usando hora del servidor ====
-                const opens = $('opens_at');
-                const tzHint = $('opens_hint');
-
-                const pad = (n) => String(n).padStart(2, '0');
-                const toLocal = (d) =>
-                    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
-                const nowFromServer = () => {
-                    // usa el reloj del servidor expuesto por el layout (opción A)
-                    const ms = (typeof window.mesasNowMs === 'function') ? window.mesasNowMs() : Date.now();
-                    return new Date(ms);
-                };
-
-                const set1015Today = () => {
-                    const d = nowFromServer();
-                    d.setHours(10, 15, 0, 0);
-                    opens.value = toLocal(d);
-                    announceOpens();
-                };
-                const setNow = () => {
-                    const d = nowFromServer();
-                    d.setSeconds(0, 0);
-                    opens.value = toLocal(d);
-                    announceOpens();
-                };
-                const clearOpens = () => { opens.value = ''; announceOpens(); };
-
-                $('btn-1015-today')?.addEventListener('click', set1015Today, { passive: true });
-                $('btn-now-opens')?.addEventListener('click', setNow, { passive: true });
-                $('btn-clear-opens')?.addEventListener('click', clearOpens, { passive: true });
-
-                function announceOpens() {
-                    if (!tzHint) return;
-                    if (!opens.value) { tzHint.textContent = ''; return; }
-                    // Muestra texto legible local del navegador (orientativo)
-                    try {
-                        const d = new Date(opens.value);
-                        tzHint.textContent = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-                    } catch (_) { tzHint.textContent = ''; }
-                }
-                announceOpens();
-
-                // ==== Anti doble submit ====
-                const form = document.getElementById('mesa-edit-form');
-                const submitBtn = document.getElementById('btn-submit');
-                form?.addEventListener('submit', () => {
-                    if (submitBtn) {
-                        submitBtn.disabled = true;
-                        submitBtn.setAttribute('aria-disabled', 'true');
-                        submitBtn.textContent = @json(__('Guardando…'));
-                    }
+                    if (f.size > MAX_BYTES) { inputImage.setCustomValidity(@json(__('La imagen supera 2 MB.'))); if (noteImage) noteImage.textContent = @json(__('Archivo demasiado grande (máx. 2 MB).')); }
+                    else { inputImage.setCustomValidity(''); if (noteImage) noteImage.textContent = ''; }
+                    const cur = $('image-current'), none = $('image-current-none'); const url = URL.createObjectURL(f);
+                    if (cur) { cur.src = url; cur.style.display = 'block'; if (none) none.style.display = 'none'; inputImage.addEventListener('formdata', () => URL.revokeObjectURL(url), { once: true }); }
                 });
 
+                // Apertura programada
+                const opens = $('opens_at'), tzHint = $('opens_hint');
+                const pad = (n) => String(n).padStart(2, '0');
+                const toLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                const nowFromServer = () => (typeof window.mesasNowMs === 'function') ? new Date(window.mesasNowMs()) : new Date();
+
+                $('btn-1015-today')?.addEventListener('click', () => { const d = nowFromServer(); d.setHours(10, 15, 0, 0); opens.value = toLocal(d); announce(); }, { passive: true });
+                $('btn-now-opens')?.addEventListener('click', () => { const d = nowFromServer(); d.setSeconds(0, 0); opens.value = toLocal(d); announce(); }, { passive: true });
+                $('btn-clear-opens')?.addEventListener('click', () => { opens.value = ''; announce(); }, { passive: true });
+
+                function announce() { if (!tzHint) return; if (!opens.value) { tzHint.textContent = ''; return; } try { const d = new Date(opens.value); tzHint.textContent = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); } catch { tzHint.textContent = ''; } }
+                announce();
+
+                // Anti doble submit
+                const form = $('mesa-edit-form'), subm = $('btn-submit');
+                form?.addEventListener('submit', () => { if (subm) { subm.disabled = true; subm.setAttribute('aria-disabled', 'true'); subm.textContent = @json(__('Guardando…')); } });
             })();
         </script>
     @endonce

@@ -1,6 +1,5 @@
-<?php
+<?php declare(strict_types=1);
 
-use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,37 +7,59 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        $schema = Schema::connection($this->getConnection());
+        Schema::create('game_tables', function (Blueprint $table) {
+            $table->bigIncrements('id');
 
-        if ($schema->hasTable('game_tables')) {
-            return;
-        }
-
-        $schema->create('game_tables', function (Blueprint $table) {
-            $table->id();
-
+            // Básicos
             $table->string('title', 120);
             $table->text('description')->nullable();
-            $table->unsignedSmallInteger('capacity');
 
-            $table->string('image_path')->nullable();
-            $table->string('image_url', 2048)->nullable();
+            // Capacidad
+            $table->unsignedInteger('capacity')->default(4);
 
+            // Estado / horarios
             $table->boolean('is_open')->default(false)->index();
-            $table->timestamp('opens_at')->nullable()->index();
-            $table->timestamp('closed_at')->nullable()->index();
+            $table->timestampTz('opens_at')->nullable()->index();
+            $table->timestampTz('closed_at')->nullable()->index();
 
-            $table->foreignIdFor(User::class, 'created_by')->constrained()->cascadeOnDelete();
-            $table->foreignIdFor(User::class, 'manager_id')->nullable()->constrained()->nullOnDelete();
+            // FKs (¡sin ->index()!)
+            $table->foreignId('created_by')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete()
+                ->cascadeOnUpdate();
+
+            $table->foreignId('manager_id')
+                ->nullable()
+                ->constrained('users')
+                ->nullOnDelete()
+                ->cascadeOnUpdate();
+
             $table->boolean('manager_counts_as_player')->default(true);
+
+            // Imagen / links
+            $table->string('image_path', 512)->nullable()->index();
+            $table->string('image_url', 1024)->nullable();
+            $table->string('join_url', 1024)->nullable();
+
+            // Notas / extras
             $table->text('manager_note')->nullable();
-            $table->string('join_url', 2048)->nullable();
+            $table->string('tags', 512)->nullable();
+            $table->json('extras')->nullable();
 
-            $table->timestamps();
+            // Flags
+            $table->boolean('is_archived')->default(false)->index();
+            $table->boolean('is_featured')->default(false)->index();
 
-            $table->index(['is_open', 'opens_at'], 'game_tables_opening_window_index');
+            // Auditoría
+            $table->timestampsTz();
+
+            // Índices compuestos útiles
+            $table->index(['is_open', 'opens_at']);
+            $table->index(['created_at']);
         });
     }
+
     public function down(): void
     {
         Schema::dropIfExists('game_tables');
