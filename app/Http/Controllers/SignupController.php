@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\GameTable;
 use App\Models\Signup;
 use App\Models\User;
+use App\Support\DatabaseUtils;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
@@ -37,20 +38,18 @@ final class SignupController extends Controller
             try {
                 $result = DB::transaction(function () use ($user, $mesa, $doSwitch) {
                     // Lock de la mesa para consistencia
-                    $mesaRow = GameTable::query()
-                        ->whereKey($mesa->getKey())
-                        ->lockForUpdate()
-                        ->first();
+                    $mesaRow = DatabaseUtils::applyPessimisticLock(
+                        GameTable::query()->whereKey($mesa->getKey())
+                    )->first();
 
                     if (!$mesaRow || !$this->mesaIsOpenNow($mesaRow)) {
                         return ['status' => 'closed'];
                     }
 
                     // Lock del signup del usuario (si existe)
-                    $existing = Signup::query()
-                        ->where('user_id', $user->id)
-                        ->lockForUpdate()
-                        ->first();
+                    $existing = DatabaseUtils::applyPessimisticLock(
+                        Signup::query()->where('user_id', $user->id)
+                    )->first();
 
                     // Ya está inscripto en esta mesa
                     if ($existing && (int) $existing->game_table_id === (int) $mesaRow->id) {
@@ -155,10 +154,11 @@ final class SignupController extends Controller
 
         $deleted = 0;
         DB::transaction(function () use ($user, $mesa, &$deleted) {
-            $deleted = Signup::where('game_table_id', (int) $mesa->id)
-                ->where('user_id', (int) $user->id)
-                ->lockForUpdate()
-                ->delete();
+            $deleted = DatabaseUtils::applyPessimisticLock(
+                Signup::query()
+                    ->where('game_table_id', (int) $mesa->id)
+                    ->where('user_id', (int) $user->id)
+            )->delete();
 
             if ($deleted) {
                 DB::table('game_tables')->where('id', $mesa->id)->update(['updated_at' => now()]);

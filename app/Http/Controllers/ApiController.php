@@ -193,6 +193,6 @@ class ApiController extends Controller
     private function etagEqualsWeak(string $a, string $b): bool
     {
         $norm = static fn(string $t) => trim(str_ireplace('W/', '', $t), " \t\n\r\0\x0B\"");
-        return $norm($a) !== '' && $norm($a) === $norm(b: $b);
+        return $norm($a) !== '' && $norm($a) === $norm($b);
     }
 }
