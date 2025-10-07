@@ -26,12 +26,43 @@ final class AppServiceProvider extends ServiceProvider
     /** Bootstrap any application services. */
     public function boot(): void
     {
+        $this->ensureSessionDriverIsAvailable();
         $this->configurePagination();
         $this->enforceHttpsWhenRequested();
         $this->configureCarbonLocale();
         $this->configureEloquentStrictness();
         $this->configureLegacyStringLength();
         $this->registerBladeConditionals();
+    }
+
+    /**
+     * Evita errores 500 cuando SESSION_DRIVER=database pero la tabla aún no existe.
+     * Cae a 'file' en forma silenciosa para mantener la app utilizable.
+     */
+    private function ensureSessionDriverIsAvailable(): void
+    {
+        if (config('session.driver') !== 'database') {
+            return;
+        }
+
+        $table = (string) config('session.table', 'sessions');
+
+        try {
+            if (Schema::hasTable($table)) {
+                return;
+            }
+        } catch (Throwable $e) {
+            // Si no se puede comprobar (por ejemplo, DB sin migrar), continuamos con el fallback.
+            Log::warning('No se pudo verificar la tabla de sesiones, usando driver file.', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        config()->set('session.driver', 'file');
+
+        Log::warning('Falta la tabla de sesiones; se fuerza SESSION_DRIVER=file como fallback.', [
+            'expected_table' => $table,
+        ]);
     }
 
     private function configurePagination(): void
