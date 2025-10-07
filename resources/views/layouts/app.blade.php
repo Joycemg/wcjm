@@ -40,6 +40,11 @@
         body {
             font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
             background: var(--bg);
+            background-image:
+                radial-gradient(circle at 0% 0%, rgba(200, 162, 76, .12), transparent 55%),
+                radial-gradient(circle at 100% 0%, rgba(123, 30, 30, .08), transparent 55%),
+                linear-gradient(180deg, rgba(250, 247, 241, .92), rgba(242, 239, 234, .96));
+            background-attachment: fixed;
             color: var(--ink);
             min-height: 100vh;
             line-height: 1.65;
@@ -49,6 +54,25 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            position: relative;
+        }
+
+        .page-body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(120deg, rgba(200, 162, 76, .08), transparent 60%),
+                linear-gradient(300deg, rgba(123, 30, 30, .07), transparent 65%);
+            opacity: .55;
+            mix-blend-mode: multiply;
+            z-index: 0;
+        }
+
+        .page-body > * {
+            position: relative;
+            z-index: 1;
         }
 
         h1,
@@ -64,16 +88,26 @@
         .container {
             max-width: 1100px;
             margin: 0 auto;
-            padding: clamp(.9rem, 3vw, 1.4rem);
+            padding: clamp(1rem, 3.2vw, 1.6rem);
         }
 
         .site-header {
             position: sticky;
             top: 0;
             z-index: 20;
-            background: linear-gradient(135deg, var(--maroon), var(--maroon-press));
-            color: #fff;
-            box-shadow: 0 14px 32px rgba(123, 30, 30, .28);
+            background: linear-gradient(135deg, rgba(123, 30, 30, .96), rgba(103, 23, 23, .96));
+            color: #fff7ee;
+            border-bottom: 1px solid rgba(255, 247, 238, .28);
+            box-shadow: 0 18px 40px rgba(123, 30, 30, .32);
+        }
+
+        .site-header::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top left, rgba(255, 247, 238, .25), transparent 55%);
+            opacity: .8;
+            pointer-events: none;
         }
 
         .site-header .container {
@@ -100,7 +134,7 @@
             border-radius: 0;
             background: linear-gradient(135deg, #f4d98a, #d7ae4f);
             color: var(--maroon);
-            box-shadow: 0 10px 18px rgba(0, 0, 0, .16);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, .18);
             font-size: 1.55rem;
         }
 
@@ -119,15 +153,17 @@
         }
 
         .site-header .btn {
-            background: rgba(255, 255, 255, .12);
-            border-color: rgba(255, 255, 255, .3);
+            background: rgba(255, 255, 255, .14);
+            border-color: rgba(255, 255, 255, .32);
             color: #fff7ee;
             font-weight: 600;
-            transition: background .2s ease, transform .2s ease;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, .18);
+            transition: background .2s ease, transform .2s ease, box-shadow .2s ease;
         }
 
         .site-header .btn:hover {
             background: rgba(255, 255, 255, .22);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, .22);
             transform: translateY(-1px);
         }
 
@@ -135,21 +171,40 @@
             background: linear-gradient(135deg, var(--gold), var(--gold-press));
             border-color: transparent;
             color: var(--ink);
-            box-shadow: 0 10px 22px rgba(200, 162, 76, .36);
+            box-shadow: 0 14px 32px rgba(200, 162, 76, .36);
         }
 
         .site-header .btn.gold:hover {
-            transform: translateY(-1px) scale(1.01);
+            transform: translateY(-1px);
         }
 
         .site-main {
             flex: 1;
-            padding: clamp(1.8rem, 5vw, 3rem) 0 clamp(2.8rem, 6vw, 4rem);
+            padding: clamp(2rem, 5vw, 3rem) 0 clamp(2.6rem, 6vw, 4rem);
         }
 
         .site-main .container {
+            position: relative;
             display: grid;
-            gap: clamp(1rem, 3vw, 1.6rem);
+            gap: clamp(1rem, 3vw, 1.8rem);
+            background: linear-gradient(180deg, rgba(250, 247, 241, .94), rgba(242, 239, 234, .9));
+            border: 1px solid rgba(217, 207, 195, .65);
+            border-radius: 0;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .site-main .container::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, rgba(200, 162, 76, .08), rgba(255, 255, 255, 0) 55%);
+            opacity: .75;
+            pointer-events: none;
+        }
+
+        .site-main .container > * {
+            position: relative;
+            z-index: 1;
         }
 
         .grid-2 {
@@ -165,11 +220,11 @@
         }
 
         .flash {
-            padding: .85rem 1rem;
+            padding: .9rem 1.1rem;
             border-radius: 0;
             border: 1px solid var(--line);
-            background: var(--card, var(--paper));
-            box-shadow: 0 8px 16px rgba(38, 33, 30, .08);
+            background: #fff;
+            box-shadow: var(--shadow-sm);
             font-weight: 600;
         }
 
@@ -186,13 +241,14 @@
         }
 
         .site-footer {
-            background: linear-gradient(135deg, var(--maroon), var(--maroon-press));
+            background: linear-gradient(135deg, rgba(123, 30, 30, .96), rgba(103, 23, 23, .96));
             color: #f8ede0;
             text-align: center;
-            padding: 1.75rem 1rem;
-            border-top: 1px solid rgba(0, 0, 0, .08);
+            padding: clamp(1.6rem, 3vw, 2rem) 1rem;
+            border-top: 1px solid rgba(255, 247, 238, .25);
             font-size: .95rem;
             letter-spacing: .03em;
+            box-shadow: 0 -12px 28px rgba(38, 33, 30, .16);
         }
 
         .site-footer a {
@@ -208,6 +264,10 @@
 
             .main-nav {
                 width: 100%;
+            }
+
+            .site-main {
+                padding-top: clamp(1.5rem, 6vw, 2rem);
             }
         }
     </style>
