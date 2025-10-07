@@ -5,53 +5,47 @@
 
 @push('head')
     <style>
-        :root {
-            --muted: #6b7280;
-            --border: #e5e7eb;
-            --maroon: #7b2d26
-        }
-
-        .wrap {
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 1rem;
+        /* ====== Mesa · Notas ====== */
+        .notes-wrap {
+            max-width: 1000px;
+            margin-inline: auto;
             display: grid;
-            gap: 1rem
+            gap: 1rem;
         }
 
         .head {
             display: flex;
             flex-direction: column;
-            gap: .5rem
+            gap: .4rem;
         }
 
         .head h1 {
             margin: 0;
-            color: var(--maroon)
+            color: var(--maroon);
         }
 
         .meta {
             color: var(--muted);
-            font-size: .95rem
+            font-size: .95rem;
         }
 
         .grid {
             display: grid;
             gap: 1rem;
-            grid-template-columns: 2fr 1fr
+            grid-template-columns: 2fr 1fr;
         }
 
-        @media (max-width:860px) {
+        @media (max-width: 860px) {
             .grid {
-                grid-template-columns: 1fr
+                grid-template-columns: 1fr;
             }
         }
 
         .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: .5rem;
             padding: 1rem;
-            border-radius: 0;
-            border: 1px solid var(--border);
-            background: #fff
         }
 
         .pill {
@@ -59,23 +53,25 @@
             align-items: center;
             justify-content: center;
             padding: .1rem .45rem;
-            border-radius: 0;
-            border: 1px solid var(--border);
+            border-radius: .5rem;
+            border: 1px solid var(--line);
             font-size: .8rem;
             color: var(--muted);
+            width: fit-content;
             margin-top: .15rem;
-            width: fit-content
         }
 
         .textarea {
             width: 100%;
             min-height: 200px;
             padding: .75rem;
-            border-radius: 0;
-            border: 1px solid var(--border);
+            border-radius: .5rem;
+            border: 1px solid var(--line);
             resize: vertical;
             font: inherit;
-            line-height: 1.5
+            line-height: 1.5;
+            background: var(--card);
+            color: var(--ink);
         }
 
         .list {
@@ -83,67 +79,66 @@
             margin: 0;
             padding: 0;
             display: grid;
-            gap: .6rem
+            gap: .6rem;
         }
 
         .row {
             display: flex;
             align-items: center;
-            gap: .6rem
+            gap: .6rem;
         }
 
         .row img {
             width: 36px;
             height: 36px;
-            border-radius: 0;
+            border-radius: .4rem;
             object-fit: cover;
-            border: 1px solid var(--border);
-            display: block
-        }
-
-        .btn {
-            display: inline-flex;
-            gap: .5rem;
-            align-items: center;
-            border: 1px solid var(--border);
-            border-radius: 0;
-            padding: .5rem .9rem
+            border: 1px solid var(--line);
+            display: block;
+            background: #fff;
         }
 
         .btn.ok {
-            background: #dcfce7;
-            border-color: #22c55e
+            background: rgba(16, 185, 129, .15);
+            border-color: rgba(16, 185, 129, .4);
         }
 
         .link {
             color: var(--maroon);
-            text-decoration: none
+            text-decoration: none;
         }
 
         .link:hover {
-            text-decoration: underline
+            text-decoration: underline;
         }
     </style>
 @endpush
 
 @section('content')
-    <main class="wrap">
+    @php
+        use Illuminate\Support\Facades\Route as LRoute;
+        $showUrl = LRoute::has('mesas.show') ? route('mesas.show', $mesa) : url('/mesas/' . ($mesa->id ?? ''));
+        $updateUrl = LRoute::has('mesas.notes.update') ? route('mesas.notes.update', $mesa) : null;
+    @endphp
+
+    <main class="notes-wrap">
         <div class="head">
             <a class="link"
-               href="{{ route('mesas.show', $mesa) }}">&larr; {{ __('Volver a la mesa') }}</a>
+               href="{{ $showUrl }}">&larr; {{ __('Volver a la mesa') }}</a>
             <h1>{{ __('Notas internas de :mesa', ['mesa' => $mesa->title]) }}</h1>
             <p class="meta">
-                {{ __('Estas notas solo son visibles para el encargado y las personas inscriptas en la mesa.') }}
-            </p>
+                {{ __('Estas notas solo son visibles para el encargado y las personas inscriptas en la mesa.') }}</p>
         </div>
 
         <div class="grid">
-            <section class="card">
-                <h2>{{ $canEdit ? __('Editar notas') : __('Notas compartidas') }}</h2>
+            <section class="card"
+                     aria-labelledby="notes-title">
+                <h2 id="notes-title"
+                    style="margin:0 0 .5rem">{{ $canEdit ? __('Editar notas') : __('Notas compartidas') }}</h2>
 
-                @if($canEdit)
+                @if($canEdit && $updateUrl)
                     <form method="POST"
-                          action="{{ route('mesas.notes.update', $mesa) }}">
+                          action="{{ $updateUrl }}">
                         @csrf @method('PUT')
                         <label class="sr-only"
                                for="manager_note">{{ __('Notas de la mesa') }}</label>
@@ -151,8 +146,9 @@
                                   name="manager_note"
                                   class="textarea"
                                   placeholder="{{ __('Agregá recordatorios, pautas o enlaces útiles para tu mesa.') }}">{{ old('manager_note', $mesa->manager_note) }}</textarea>
-                        @error('manager_note') <div class="text-danger"
-                         style="margin-top:.35rem">{{ $message }}</div> @enderror
+                        @error('manager_note')
+                            <div style="color:#b91c1c;margin-top:.35rem">{{ $message }}</div>
+                        @enderror
                         <div style="display:flex;justify-content:flex-end;margin-top:.75rem">
                             <button class="btn ok"
                                     type="submit">{{ __('Guardar notas') }}</button>
@@ -161,14 +157,17 @@
                 @elseif(filled($mesa->manager_note))
                     <div style="white-space:pre-wrap;line-height:1.6">{!! nl2br(e($mesa->manager_note)) !!}</div>
                 @else
-                    <div style="color:var(--muted);background:rgba(123,45,38,.05);border-radius: 0;padding:.75rem">
+                    <div class="muted"
+                         style="background:rgba(123,45,38,.06);padding:.75rem;border-radius:.5rem">
                         {{ __('Todavía no hay notas cargadas.') }}
                     </div>
                 @endif
             </section>
 
-            <aside class="card">
-                <h2>{{ __('Quiénes pueden ver esto') }}</h2>
+            <aside class="card"
+                   aria-labelledby="who-title">
+                <h2 id="who-title"
+                    style="margin:0 0 .5rem">{{ __('Quiénes pueden ver esto') }}</h2>
                 <ul class="list">
                     @foreach($players as $signup)
                         @php
@@ -178,7 +177,7 @@
                           @endphp
                         <li class="row">
                             <img src="{{ $avatar }}"
-                                 alt="{{ $name }}"
+                                 alt="{{ e($name) }}"
                                  width="36"
                                  height="36"
                                  loading="lazy"
