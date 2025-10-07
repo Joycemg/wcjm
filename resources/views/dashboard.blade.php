@@ -39,7 +39,7 @@
         .ava {
             width: 32px;
             height: 32px;
-            border-radius: 999px;
+            border-radius: 0;
             border: 1px solid var(--border);
             object-fit: cover;
             flex: 0 0 32px;
@@ -58,7 +58,7 @@
             align-items: center;
             gap: .35rem;
             padding: .15rem .6rem;
-            border-radius: 999px;
+            border-radius: 0;
             font-size: .8rem;
             background: #f3f4f6;
             color: #374151;

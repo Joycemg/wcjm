@@ -155,10 +155,10 @@
 @push('head')
 <style>
 /* Card mesas (solo claro) */
-.mesa-card .state{position:absolute;top:8px;left:8px;padding:4px 8px;border-radius:999px;font-size:.75rem;color:#fff;background:#111;opacity:.9}
+.mesa-card .state{position:absolute;top:8px;left:8px;padding:4px 8px;border-radius: 0;font-size:.75rem;color:#fff;background:#111;opacity:.9}
 .mesa-card .state.open{background:#2e7d32}
 .mesa-card .state.closed{background:#6b7280}
-.mesa-card .bar{height:6px;background:#f1f1f1;border-radius:999px;overflow:hidden;margin:.5rem 0}
+.mesa-card .bar{height:6px;background:#f1f1f1;border-radius: 0;overflow:hidden;margin:.5rem 0}
 .mesa-card .bar>span{display:block;height:100%;background:#3b82f6}
 </style>
 @endpush

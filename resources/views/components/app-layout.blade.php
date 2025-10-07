@@ -69,18 +69,21 @@
               content="{{ $imageUrl }}">
     @endif
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #F6EADF;
-            --card: #FFF7EE;
-            --ink: #2E2724;
-            --muted: #6F655E;
+            --bg: #F2EFEA;
+            --card: #FAF7F1;
+            --ink: #26211E;
+            --muted: #57514D;
             --maroon: #7B1E1E;
             --gold: #C8A24C;
-            --line: #E2D3C2;
+            --line: #D9CFC3;
             --maroon-press: #671717;
             --gold-press: #AD8C3D;
-            --focus: #2E6FEA22
+            --focus: #2E6FEA33;
         }
 
         * {
@@ -96,7 +99,7 @@
             margin: 0;
             background: var(--bg);
             color: var(--ink);
-            font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Arial, sans-serif;
+            font: 16px/1.65 "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
             -webkit-text-size-adjust: 100%
         }
 
@@ -139,7 +142,7 @@
             background: #fff;
             color: #111;
             padding: .5rem .75rem;
-            border-radius: .5rem;
+            border-radius: 0;
             border: 1px solid var(--line)
         }
 
@@ -156,7 +159,7 @@
         .form-control {
             width: 100%;
             padding: .65rem .8rem;
-            border-radius: .75rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: #fff;
             color: var(--ink);
@@ -183,7 +186,7 @@
         .form-alert {
             margin: 1rem 0;
             padding: .75rem .9rem;
-            border-radius: .75rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: #fff;
         }
@@ -295,12 +298,16 @@
             gap: .4rem;
             min-height: 44px;
             padding: .55rem .9rem;
-            border-radius: .75rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: var(--card);
             color: var(--ink);
             cursor: pointer;
-            text-decoration: none
+            text-decoration: none;
+            font-weight: 600;
+            letter-spacing: .01em;
+            transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+            box-shadow: 0 6px 14px rgba(38, 33, 30, .08)
         }
 
         .btn.ok {
@@ -359,9 +366,9 @@
         .card {
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 1rem;
+            border-radius: 0;
             padding: clamp(.75rem, 2.5vw, 1rem);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, .04)
+            box-shadow: 0 8px 16px rgba(38, 33, 30, .06)
         }
 
         .grid {
@@ -390,7 +397,7 @@
         select {
             width: 100%;
             padding: .65rem .8rem;
-            border-radius: .75rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: #fff;
             color: #111
@@ -427,17 +434,17 @@
 
         tbody tr {
             background: #fff;
-            border-radius: .6rem
+            border-radius: 0
         }
 
         tbody tr td:first-child {
-            border-top-left-radius: .6rem;
-            border-bottom-left-radius: .6rem
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0
         }
 
         tbody tr td:last-child {
-            border-top-right-radius: .6rem;
-            border-bottom-right-radius: .6rem
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0
         }
 
         .cards {
@@ -449,7 +456,7 @@
         .card-game {
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 1rem;
+            border-radius: 0;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -485,7 +492,7 @@
         .badge {
             font-size: .8rem;
             padding: .22rem .55rem;
-            border-radius: .6rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: #fff
         }
@@ -529,7 +536,7 @@
         .avatars img {
             width: 26px;
             height: 26px;
-            border-radius: 50%;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: #fff;
             display: block
@@ -568,7 +575,7 @@
 
         .flash {
             padding: .7rem .9rem;
-            border-radius: .8rem;
+            border-radius: 0;
             margin: .7rem 0;
             background: #E9F7EF;
             border: 1px solid #BFE6CA
@@ -659,7 +666,7 @@
                     <img src="{{ $avatar }}"
                          alt="{{ __('Mi avatar') }}"
                          loading="lazy"
-                         style="width:26px;height:26px;border-radius:50%;object-fit:cover;border:1px solid var(--line)">
+                         style="width:26px;height:26px;border-radius: 0;object-fit:cover;border:1px solid var(--line)">
                     {{ auth()->user()->name ?? __('Mi perfil') }}
                 </a>
 

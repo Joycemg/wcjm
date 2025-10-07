@@ -68,7 +68,7 @@
                      class="menu"
                      role="menu"
                      hidden
-                     style="position:absolute;right:0;top:calc(100% + .35rem);min-width:220px;background:var(--card);border:1px solid var(--line);border-radius:.6rem;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:.35rem">
+                     style="position:absolute;right:0;top:calc(100% + .35rem);min-width:220px;background:var(--card);border:1px solid var(--line);border-radius: 0;box-shadow:0 8px 24px rgba(0,0,0,.08);padding:.35rem">
                     @if (Route::has('profile.edit'))
                         <a role="menuitem"
                            class="btn"

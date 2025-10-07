@@ -59,7 +59,7 @@
         .profile-ava {
             width: 96px;
             height: 96px;
-            border-radius: 50%;
+            border-radius: 0;
             border: 2px solid var(--line);
             object-fit: cover;
             background: #f6f6f6

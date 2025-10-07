@@ -64,16 +64,19 @@
     <meta name="twitter:image"
           content="{{ \Illuminate\Support\Str::startsWith($image, ['http://', 'https://']) ? $image : url($image) }}">
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #F6EADF;
-            --card: #FFF7EE;
-            --ink: #2E2724;
-            --muted: #6F655E;
+            --bg: #F2EFEA;
+            --card: #FAF7F1;
+            --ink: #26211E;
+            --muted: #57514D;
             --maroon: #7B1E1E;
             --gold: #C8A24C;
-            --line: #E2D3C2;
-            --focus: #2E6FEA22
+            --line: #D9CFC3;
+            --focus: #2E6FEA33
         }
 
         * {
@@ -89,7 +92,7 @@
             margin: 0;
             background: var(--bg);
             color: var(--ink);
-            font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Arial, sans-serif;
+            font: 16px/1.65 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
             -webkit-text-size-adjust: 100%;
             display: flex;
             min-height: 100vh;
@@ -141,14 +144,14 @@
         .card {
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 1rem;
+            border-radius: 0;
             box-shadow: 0 8px 24px rgba(0, 0, 0, .06);
             padding: clamp(.9rem, 3vw, 1.25rem)
         }
 
         .flash {
             padding: .65rem .8rem;
-            border-radius: .6rem;
+            border-radius: 0;
             margin: .5rem 0;
             background: #E9F7EF;
             border: 1px solid #BFE6CA
@@ -194,7 +197,7 @@
         .form-control {
             width: 100%;
             padding: .65rem .8rem;
-            border-radius: .75rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: #fff;
             color: var(--ink);
@@ -222,7 +225,7 @@
             color: var(--muted);
             cursor: pointer;
             padding: .25rem;
-            border-radius: .5rem;
+            border-radius: 0;
         }
 
         .pass-toggle:focus-visible {
@@ -256,7 +259,7 @@
             width: 18px;
             height: 18px;
             border: 1px solid var(--line);
-            border-radius: .35rem;
+            border-radius: 0;
             accent-color: var(--maroon)
         }
 
@@ -296,7 +299,7 @@
         .form-alert {
             margin-bottom: 1rem;
             padding: .75rem .9rem;
-            border-radius: .75rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: #fff
         }
