@@ -10,6 +10,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
@@ -188,11 +189,17 @@ final class GameTableController extends Controller
     {
         $this->requireUser($request);
 
-        $managerCandidates = User::query()
-            ->select(['id', 'name', 'username', 'email'])
-            ->orderByRaw("COALESCE(NULLIF(name,''), username, email) ASC")
-            ->limit(50)
-            ->get();
+        $managerCandidates = new Collection();
+
+        try {
+            $managerCandidates = User::query()
+                ->select(['id', 'name', 'username', 'email'])
+                ->orderByRaw("COALESCE(NULLIF(name,''), username, email) ASC")
+                ->limit(50)
+                ->get();
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return view($this->pickView(['mesas.create', 'tables.create']), compact('managerCandidates'));
     }
