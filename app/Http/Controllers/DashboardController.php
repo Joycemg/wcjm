@@ -35,6 +35,7 @@ class DashboardController extends Controller
         static $hasGameTables = null;
         static $hasHonorEvents = null;
         static $colsVH = null;
+        static $hasUsersHonorColumn = null;
 
         if ($hasVoteHistories === null)
             $hasVoteHistories = Schema::hasTable('vote_histories');
@@ -42,6 +43,8 @@ class DashboardController extends Controller
             $hasGameTables = Schema::hasTable('game_tables');
         if ($hasHonorEvents === null)
             $hasHonorEvents = Schema::hasTable('honor_events');
+        if ($hasUsersHonorColumn === null)
+            $hasUsersHonorColumn = Schema::hasTable('users') && Schema::hasColumn('users', 'honor');
 
         if ($hasVoteHistories && $colsVH === null) {
             $colsVH = [
@@ -56,6 +59,18 @@ class DashboardController extends Controller
         }
 
         // =============== Honor total (si hay tabla) ===============
+        if ($hasUsersHonorColumn) {
+            $storedHonor = (int) DB::table('users')
+                ->where('id', $user->id)
+                ->value('honor');
+
+            $stats['honor_persisted'] = $storedHonor;
+
+            if ($stats['honor'] === null) {
+                $stats['honor'] = $storedHonor;
+            }
+        }
+
         if ($hasHonorEvents) {
             $honorTotal = (int) DB::table('honor_events')
                 ->where('user_id', $user->id)
@@ -63,14 +78,10 @@ class DashboardController extends Controller
 
             $stats['honor_total'] = $honorTotal;
             $stats['honor'] = $honorTotal;
-        } elseif ($stats['honor'] === null && Schema::hasColumn('users', 'honor')) {
+        } elseif ($stats['honor'] === null && $hasUsersHonorColumn) {
             // Instalaciones que persisten el agregado directo en users.honor.
-            $storedHonor = (int) DB::table('users')
-                ->where('id', $user->id)
-                ->value('honor');
-
-            $stats['honor'] = $storedHonor;
-            $stats['honor_total'] = $storedHonor;
+            $stats['honor'] = $stats['honor_persisted'] ?? 0;
+            $stats['honor_total'] = $stats['honor'];
         }
 
         // =============== Historia (si hay tabla) ===============

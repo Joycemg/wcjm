@@ -21,8 +21,13 @@ class HonorRankingController extends Controller
 
         $like = '%' . addcslashes($q, "%_\\") . '%';
 
-        // ===== Fallback si faltan tablas (primera instalación) =====
-        if (!Schema::hasTable('users') || !Schema::hasTable('honor_events')) {
+        // ===== Estado de schema =====
+        $hasUsers = Schema::hasTable('users');
+        $hasHonorEvents = $hasUsers && Schema::hasTable('honor_events');
+        $hasUsersHonorColumn = $hasUsers && Schema::hasColumn('users', 'honor');
+
+        // ===== Fallback si faltan tablas/columnas =====
+        if (!$hasUsers || (!$hasHonorEvents && !$hasUsersHonorColumn)) {
             $empty = new LengthAwarePaginator(
                 collect(), // items
                 0,         // total
@@ -45,15 +50,28 @@ class HonorRankingController extends Controller
             return $this->withCacheHeaders($response, $request, $etag, 60);
         }
 
-        // ===== Subconsulta de totales (SUM points por usuario) =====
-        $totalsSub = DB::table('honor_events')
-            ->select('user_id', DB::raw('SUM(points) AS honor_total'))
-            ->groupBy('user_id');
+        // ===== Query principal =====
+        $usersQuery = User::query()->from('users AS u');
 
-        // ===== Query principal (JOIN a subconsulta; búsqueda segura) =====
-        $users = User::query()
-            ->from('users AS u')
-            ->leftJoinSub($totalsSub, 't', 't.user_id', '=', 'u.id')
+        $selects = ['u.*'];
+
+        if ($hasHonorEvents) {
+            $totalsSub = DB::table('honor_events')
+                ->select('user_id', DB::raw('SUM(points) AS honor_total'))
+                ->groupBy('user_id');
+
+            $usersQuery->leftJoinSub($totalsSub, 't', 't.user_id', '=', 'u.id');
+            $honorSelect = $hasUsersHonorColumn
+                ? 'COALESCE(t.honor_total, u.honor, 0) AS honor_total'
+                : 'COALESCE(t.honor_total, 0) AS honor_total';
+        } else {
+            $honorSelect = 'COALESCE(u.honor, 0) AS honor_total';
+            $totalsSub = null;
+        }
+
+        $selects[] = DB::raw($honorSelect);
+
+        $users = $usersQuery
             ->when($q !== '', function ($query) use ($like) {
                 $query->where(function ($w) use ($like) {
                     $w->where('u.name', 'LIKE', $like)
@@ -61,10 +79,7 @@ class HonorRankingController extends Controller
                         ->orWhere('u.email', 'LIKE', $like);
                 });
             })
-            ->select([
-                'u.*',
-                DB::raw('COALESCE(t.honor_total, 0) AS honor_total'),
-            ])
+            ->select($selects)
             ->orderByDesc('honor_total')
             ->orderBy('u.id') // desempate estable
             ->paginate($perPage, ['*'], 'page', $page)
@@ -75,20 +90,29 @@ class HonorRankingController extends Controller
         $myRank = null;
 
         if ($auth) {
-            $myTotal = (int) DB::table('honor_events')->where('user_id', $auth->id)->sum('points');
+            if ($hasHonorEvents) {
+                $myTotal = (int) DB::table('honor_events')->where('user_id', $auth->id)->sum('points');
 
-            // posición = 1 + cantidad de usuarios con total > mi total
-            $betterCount = DB::query()
-                ->fromSub($totalsSub, 't')
-                ->where('t.honor_total', '>', $myTotal)
-                ->count();
+                // posición = 1 + cantidad de usuarios con total > mi total
+                $betterCount = DB::query()
+                    ->fromSub($totalsSub, 't')
+                    ->where('t.honor_total', '>', $myTotal)
+                    ->count();
+            } else {
+                $myTotal = (int) DB::table('users')->where('id', $auth->id)->value('honor');
+                $betterCount = DB::table('users')
+                    ->where('honor', '>', $myTotal)
+                    ->count();
+            }
 
             $myRank = $betterCount + 1;
         }
 
         // ===== ETag de la vista SSR (304 si no cambió) =====
-        $maxHe = (string) (DB::table('honor_events')->max('updated_at')
-            ?? DB::table('honor_events')->max('created_at') ?? '');
+        $maxHe = $hasHonorEvents
+            ? (string) (DB::table('honor_events')->max('updated_at')
+                ?? DB::table('honor_events')->max('created_at') ?? '')
+            : '';
         $maxU = (string) (DB::table('users')->max('updated_at')
             ?? DB::table('users')->max('created_at') ?? '');
 
