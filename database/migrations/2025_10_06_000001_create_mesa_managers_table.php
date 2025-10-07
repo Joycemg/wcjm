@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (Schema::hasTable('mesa_managers')) {
+            return;
+        }
+
         Schema::create('mesa_managers', function (Blueprint $t) {
             $t->id();
             $t->foreignIdFor(GameTable::class, 'mesa_id')->constrained('game_tables')->cascadeOnDelete();

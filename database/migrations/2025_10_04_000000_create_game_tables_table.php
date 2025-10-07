@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (Schema::hasTable('game_tables')) {
+            return;
+        }
+
         Schema::create('game_tables', function (Blueprint $table) {
             $table->id();
 
