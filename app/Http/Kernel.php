@@ -70,6 +70,7 @@ final class Kernel extends HttpKernel
 
         // Custom
         'admin' => \App\Http\Middleware\AdminOnly::class,
+        'admin.only' => \App\Http\Middleware\AdminOnly::class,
     ];
 
     /**
@@ -90,6 +91,7 @@ final class Kernel extends HttpKernel
 
         // Custom
         'admin' => \App\Http\Middleware\AdminOnly::class,
+        'admin.only' => \App\Http\Middleware\AdminOnly::class,
     ];
 
     /**
