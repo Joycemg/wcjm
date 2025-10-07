@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class HonorEvent extends Model
 {
+    use HasFactory;
+
     // Decaimiento mensual por inactividad
     public const R_DECAY = 'decay:inactivity';
 

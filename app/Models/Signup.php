@@ -7,6 +7,7 @@ use Carbon\CarbonInterface;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
@@ -27,6 +28,16 @@ use Illuminate\Support\Str;
  */
 class Signup extends Model
 {
+    use HasFactory;
+
+    /**
+     * Cache simple por instancia para la capacidad de la mesa.
+     * Evita repetir consultas cuando se calculan varios atributos derivados.
+     */
+    private ?int $memoTableCapacity = null;
+
+    /** Identificador de mesa asociado al cache de capacidad. */
+    private ?int $memoCapacityTableId = null;
     /** Columnas asignables */
     protected $fillable = [
         'game_table_id',
@@ -140,6 +151,18 @@ class Signup extends Model
     }
 
     /** @param Builder<Signup> $q */
+    public function scopeCounted(Builder $q): Builder
+    {
+        return $q->where('is_counted', 1);
+    }
+
+    /** @param Builder<Signup> $q */
+    public function scopeManagers(Builder $q): Builder
+    {
+        return $q->where('is_manager', 1);
+    }
+
+    /** @param Builder<Signup> $q */
     public function scopeForTableAndUser(Builder $q, int $tableId, int $userId): Builder
     {
         return $q->forTable($tableId)->forUser($userId);
@@ -209,19 +232,13 @@ class Signup extends Model
             return null;
         }
 
-        $cap = null;
-        if ($this->relationLoaded('gameTable')) {
-            $cap = optional($this->getRelation('gameTable'))->capacity;
-        }
-        if ($cap === null) {
-            $cap = (int) GameTable::query()->whereKey($this->game_table_id)->value('capacity');
-        }
-        if ((int) $cap <= 0) {
+        $cap = $this->tableCapacity();
+        if ($cap <= 0) {
             return false;
         }
 
         $pos = $this->position;
-        return $pos ? $pos <= (int) $cap : null;
+        return $pos ? $pos <= $cap : null;
     }
 
     /** ¿Está en lista de espera (más allá de capacidad)? */
@@ -231,19 +248,13 @@ class Signup extends Model
             return null;
         }
 
-        $cap = null;
-        if ($this->relationLoaded('gameTable')) {
-            $cap = optional($this->getRelation('gameTable'))->capacity;
-        }
-        if ($cap === null) {
-            $cap = (int) GameTable::query()->whereKey($this->game_table_id)->value('capacity');
-        }
-        if ((int) $cap <= 0) {
+        $cap = $this->tableCapacity();
+        if ($cap <= 0) {
             return false;
         }
 
         $pos = $this->position;
-        return $pos ? $pos > (int) $cap : null;
+        return $pos ? $pos > $cap : null;
     }
 
     /**
@@ -334,6 +345,42 @@ class Signup extends Model
             $s->game_table_id = (int) $s->game_table_id;
             $s->user_id = (int) $s->user_id;
         });
+    }
+
+    /* =========================
+     * Helpers de capacidad / consultas
+     * ========================= */
+
+    private function tableCapacity(): int
+    {
+        $tableId = $this->game_table_id ? (int) $this->game_table_id : null;
+
+        if ($tableId === null) {
+            return 0;
+        }
+
+        if ($this->memoTableCapacity !== null && $this->memoCapacityTableId === $tableId) {
+            return $this->memoTableCapacity;
+        }
+
+        $cap = null;
+
+        if ($this->relationLoaded('gameTable')) {
+            $mesa = $this->getRelation('gameTable');
+            if ($mesa) {
+                $cap = $mesa->capacity;
+            }
+        }
+
+        if ($cap === null) {
+            $cap = GameTable::query()->whereKey($tableId)->value('capacity');
+        }
+
+        $capInt = (int) ($cap ?? 0);
+
+        $this->memoCapacityTableId = $tableId;
+
+        return $this->memoTableCapacity = max(0, $capInt);
     }
 
     /* =========================

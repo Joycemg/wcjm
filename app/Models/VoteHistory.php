@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use DateTimeInterface;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -28,6 +29,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class VoteHistory extends Model
 {
+    use HasFactory;
+
     /** @var array<int,string> */
     protected $fillable = [
         'user_id',
