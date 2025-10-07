@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\GameTableClosed;
 use App\Models\GameTable;
+use App\Support\DatabaseUtils;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,8 +32,7 @@ class GameTableAdminController extends Controller
         try {
             $closed = DB::transaction(function () use ($mesa): bool {
                 /** @var GameTable $row */
-                $row = GameTable::query()
-                    ->lockForUpdate()
+                $row = DatabaseUtils::applyPessimisticLock(GameTable::query())
                     ->findOrFail($mesa->getKey());
 
                 // Preferir métodos de dominio si existen
