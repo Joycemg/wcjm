@@ -117,8 +117,8 @@ class HonorRankingController extends Controller
             ?? DB::table('users')->max('created_at') ?? '');
 
         $seed = [
-            'rev_he' => $maxHe,
-            'rev_u' => $maxU,
+            'etag_he' => $maxHe,
+            'etag_u' => $maxU,
             'q' => $q,
             'page' => $page,
             'per_page' => $perPage,

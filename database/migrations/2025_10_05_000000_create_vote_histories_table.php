@@ -12,7 +12,7 @@ return new class extends Migration {
             $table->id();
 
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('game_table_id')->constrained('game_tables')->cascadeOnDelete();
+            $table->foreignId('game_table_id')->nullable()->constrained('game_tables')->nullOnDelete();
 
             $table->string('game_title', 200);
             $table->string('kind', 12)->default('close')->index(); // 'close'

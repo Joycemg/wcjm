@@ -208,12 +208,6 @@
         $isOpenNow = (bool) $mesa->is_open_now;
         $signedOther = isset($myMesaId) && $myMesaId && $myMesaId !== $mesa->id;
 
-        // REV lógico inicial (updated_at : state : opens_ts)
-        $revTs = $mesa->updated_at?->timestamp ?? 0;
-        $opensTs = $mesa->opens_at?->timestamp ?? 0;
-        $state = $isOpenNow ? 1 : 0;
-        $logicalRev = "{$revTs}:{$state}:{$opensTs}";
-
         $canVoteRoute = \Illuminate\Support\Facades\Route::has('signups.store');
         $canUnvoteRoute = \Illuminate\Support\Facades\Route::has('signups.destroy');
         $canOpenRoute = \Illuminate\Support\Facades\Route::has('mesas.open');
@@ -258,8 +252,7 @@
     <div id="mesa-page"
          data-mesa-id="{{ $mesa->id }}"
          data-is-open="{{ $mesa->is_open ? 1 : 0 }}"
-         data-opens-at="{{ $mesa->opens_at ? $mesa->opens_at->toIso8601String() : '' }}"
-         data-rev="">
+         data-opens-at="{{ $mesa->opens_at ? $mesa->opens_at->toIso8601String() : '' }}">
 
         <div class="grid g2">
             <div class="card"

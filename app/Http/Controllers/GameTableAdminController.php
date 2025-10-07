@@ -56,14 +56,10 @@ class GameTableAdminController extends Controller
                 }
 
                 if ($did) {
-                    // 'rev' opcional: usa campo rev o updated_at (ms) si existe
-                    $rev = $row->rev ?? ($row->updated_at?->valueOf() ?? now()->valueOf());
-
                     event(GameTableClosed::fromModel(
                         $row,
                         true,   // firstClose
-                        null,   // signupsCount opcional
-                        $rev    // rev opcional
+                        null    // signupsCount opcional
                     ));
                 }
 
