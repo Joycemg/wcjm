@@ -391,21 +391,6 @@ class GameTableController extends Controller
         abort_unless($isOwner || $isManager || $isAdmin, 403);
     }
 
-    /** Devuelve el usuario autenticado tipado o aborta 403 (quita warnings) */
-    private function requireUser(Request $request): User
-    {
-        $u = $request->user();
-        abort_unless($u instanceof User, 403);
-        return $u;
-    }
-
-    /** Devuelve el usuario autenticado tipado o null (para vistas públicas) */
-    private function optionalUser(Request $request): ?User
-    {
-        $u = $request->user();
-        return $u instanceof User ? $u : null;
-    }
-
     private function validateTable(Request $request): array
     {
         return $this->validateInput($request, [

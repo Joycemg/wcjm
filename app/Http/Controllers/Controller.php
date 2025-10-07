@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -100,6 +101,28 @@ class Controller extends BaseController
             $pp = $max;
 
         return $pp;
+    }
+
+    /* =========================
+     *  AUTH HELPERS
+     * ========================= */
+
+    /** Obtiene el usuario autenticado tipado o null. */
+    protected function optionalUser(Request $request): ?User
+    {
+        $user = $request->user();
+
+        return $user instanceof User ? $user : null;
+    }
+
+    /** Obtiene el usuario autenticado tipado o aborta con 403. */
+    protected function requireUser(Request $request): User
+    {
+        $user = $this->optionalUser($request);
+
+        abort_unless($user instanceof User, 403);
+
+        return $user;
     }
 
     /* =========================

@@ -208,14 +208,6 @@ class ProfileController extends Controller
      * Helpers privados
      * ========================= */
 
-    /** Asegura user autenticado tipado (evita warnings del IDE) */
-    private function requireUser(Request $request): User
-    {
-        $u = $request->user();
-        abort_unless($u instanceof User, 403);
-        return $u;
-    }
-
     private function avatarDisk(): string
     {
         return (string) config('users.avatar_disk', config('filesystems.default', 'public'));

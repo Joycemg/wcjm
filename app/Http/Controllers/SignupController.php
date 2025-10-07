@@ -176,14 +176,6 @@ final class SignupController extends Controller
 
     /* ========================= Helpers ========================= */
 
-    /** Devuelve el usuario autenticado tipado o aborta 403 (evita warnings del IDE) */
-    private function requireUser(Request $request): User
-    {
-        $u = $request->user();
-        abort_unless($u instanceof User, 403);
-        return $u;
-    }
-
     /** ¿La mesa está abierta "ahora"? Usa huso de pantalla del Controller. */
     private function mesaIsOpenNow(GameTable $mesa): bool
     {
