@@ -4,18 +4,20 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
 <head>
-    @php($appName = config('app.name', 'La Taberna'))
+    @php
+        $appName = config('app.name', 'La Taberna');
+
+        if (! isset($hasViteBuild)) {
+            $viteManifest = public_path('build/manifest.json');
+            $viteHot = public_path('hot');
+            $hasViteBuild = file_exists($viteManifest) || file_exists($viteHot);
+        }
+    @endphp
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="server-now-ms" content="{{ now('UTC')->valueOf() }}">
     <title>@yield('title', $appName)</title>
-
-    @php
-        $viteManifest = public_path('build/manifest.json');
-        $viteHot = public_path('hot');
-        $hasViteBuild = file_exists($viteManifest) || file_exists($viteHot);
-    @endphp
 
     @if ($hasViteBuild)
         {{-- Usa assets generados por Vite si existen --}}
