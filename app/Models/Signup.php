@@ -72,6 +72,25 @@ class Signup extends Model
         'no_show_by' => 'integer',
     ];
 
+    public function getAttendedAttribute($value): ?bool
+    {
+        if (array_key_exists('attended', $this->getAttributes())) {
+            return $value === null ? null : (bool) $value;
+        }
+
+        $confirmed = $this->getAttributes()['attendance_confirmed_at'] ?? null;
+        if ($confirmed !== null) {
+            return true;
+        }
+
+        $noShow = $this->getAttributes()['no_show_at'] ?? null;
+        if ($noShow !== null) {
+            return false;
+        }
+
+        return null;
+    }
+
     /** Tocar la mesa al cambiar un signup (para ordenar por actividad) */
     protected $touches = ['gameTable'];
 
