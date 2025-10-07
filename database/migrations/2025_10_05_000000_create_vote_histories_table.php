@@ -14,7 +14,7 @@ return new class extends Migration {
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('game_table_id')->nullable()->constrained('game_tables')->nullOnDelete();
 
-            $table->string('game_title', 200);
+            $table->string('game_title', 191);
             $table->string('kind', 12)->default('close')->index(); // 'close'
             $table->timestamp('happened_at')->nullable()->index(); // fecha mostrada
 
@@ -22,6 +22,7 @@ return new class extends Migration {
 
             // Un cierre por usuario/mesa
             $table->unique(['user_id', 'game_table_id', 'kind'], 'vh_user_table_kind_unique');
+            $table->index(['game_table_id', 'kind'], 'vh_table_kind_index');
         });
     }
 

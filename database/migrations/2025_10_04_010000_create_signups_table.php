@@ -25,9 +25,10 @@ return new class extends Migration {
 
             $table->timestamps();
 
-            $table->unique('user_id', 'signups_user_id_unique');
+            $table->index('user_id', 'signups_user_id_index');
             $table->unique(['game_table_id', 'user_id'], 'signups_game_table_id_user_id_unique');
             $table->index(['game_table_id', 'created_at'], 'signups_game_table_id_created_at_index');
+            $table->index(['game_table_id', 'attended'], 'signups_attendance_lookup_index');
         });
     }
     public function down(): void
