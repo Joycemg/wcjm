@@ -40,11 +40,10 @@
 
 @section('content')
     @php
-        use Carbon\Carbon;
         $tz = config('app.display_timezone', config('app.timezone', 'UTC'));
         $opensAtObj = filled(old('opens_at'))
-            ? Carbon::parse(old('opens_at'), $tz)
-            : Carbon::now($tz)->setTime(22, 15, 0);
+            ? \Carbon\Carbon::parse(old('opens_at'), $tz)
+            : \Carbon\Carbon::now($tz)->setTime(22, 15, 0);
         $opensAtValue = $opensAtObj->format('Y-m-d\TH:i');
         $managerCandidates = collect($managerCandidates ?? []);
     @endphp
