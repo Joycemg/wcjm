@@ -60,6 +60,11 @@ Route::name('mesas.')->prefix('mesas')->group(function () use ($authVerified) {
         Route::post('/{mesa}/open', [GameTableController::class, 'open'])->whereNumber('mesa')->name('open');
         Route::post('/{mesa}/close', [GameTableController::class, 'close'])->whereNumber('mesa')->name('close');
 
+        // Notas privadas y estado del encargado
+        Route::get('/{mesa}/notas', [GameTableController::class, 'notes'])->whereNumber('mesa')->name('notes');
+        Route::put('/{mesa}/notas', [GameTableController::class, 'updateNotes'])->whereNumber('mesa')->name('notes.update');
+        Route::post('/{mesa}/manager-playing', [GameTableController::class, 'updateManagerPlaying'])->whereNumber('mesa')->name('manager.playing');
+
         // Atajo "mi mesa"
         Route::get('/mine', [GameTableController::class, 'mine'])->name('mine');
     });

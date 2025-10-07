@@ -160,6 +160,13 @@
             gap: .1rem
         }
 
+        .manager-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            align-items: center;
+        }
+
         .honor-actions {
             display: flex;
             flex-wrap: wrap;
@@ -333,6 +340,15 @@
                         </div>
                     @endif
 
+                    @if($canViewNotes && \Illuminate\Support\Facades\Route::has('mesas.notes'))
+                        <div class="manager-meta">
+                            <strong>{{ __('Notas internas') }}</strong>
+                            <a class="btn"
+                               style="width:max-content"
+                               href="{{ route('mesas.notes', $mesa) }}">{{ __('Abrir notas privadas') }}</a>
+                        </div>
+                    @endif
+
                     <p class="honor-note">
                         💡 {{ __('Quien administra la mesa puede marcar asistencia, ausencias y comportamiento: el honor se actualiza en forma automática.') }}
                     </p>
@@ -341,6 +357,24 @@
                         <div class="honor-note">
                             <strong>{{ __('Nota interna') }}:</strong>
                             {!! nl2br(e($managerNote)) !!}
+                        </div>
+                    @endif
+
+                    @if(($isManager || $isAdmin) && \Illuminate\Support\Facades\Route::has('mesas.manager.playing'))
+                        <div class="manager-meta">
+                            <strong>{{ __('Tu participación como encargado') }}</strong>
+                            <form class="manager-actions"
+                                  method="POST"
+                                  action="{{ route('mesas.manager.playing', $mesa) }}">
+                                @csrf
+                                <input type="hidden" name="playing" value="{{ $managerCountsAsPlayer ? '0' : '1' }}">
+                                <button class="btn {{ $managerCountsAsPlayer ? 'danger' : 'ok' }}" type="submit">
+                                    {{ $managerCountsAsPlayer ? __('No voy a jugar') : __('Volver a jugar') }}
+                                </button>
+                                @if(!$managerCountsAsPlayer)
+                                    <span class="pill off">{{ __('Actualmente figurás solo como encargado') }}</span>
+                                @endif
+                            </form>
                         </div>
                     @endif
                 </div>
@@ -356,6 +390,10 @@
                         <h3 style="color:var(--maroon);margin-top:0">
                             {{ __('Jugadores') }} ({{ $players->count() }}/{{ (int) $mesa->capacity }})
                         </h3>
+
+                        @if(!$managerCountsAsPlayer)
+                            <p class="muted" style="margin-top:-.25rem">{{ __('El encargado no ocupa un lugar de jugador en esta mesa.') }}</p>
+                        @endif
 
                         <div class="table-wrap">
                             <table>
@@ -425,7 +463,7 @@
                                                             <label>
                                                                 {{ __('Asistencia') }}
                                                                 <select name="attended">
-                                                                    <option value="">{{ __('Sin cambios') }}</option>
+                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
                                                                     <option value="1" @selected($s->attended === true)>{{ __('Confirmar asistencia (+10)') }}</option>
                                                                     <option value="0" @selected($s->attended === false)>{{ __('Marcar como ausente') }}</option>
                                                                 </select>
@@ -440,7 +478,7 @@
                                                             <label>
                                                                 {{ __('Comportamiento') }}
                                                                 <select name="behavior">
-                                                                    <option value="">{{ __('Sin cambios') }}</option>
+                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
                                                                     <option value="good" @selected($s->behavior === 'good')>{{ __('Buen comportamiento (+10)') }}</option>
                                                                     <option value="regular" @selected(($s->behavior ?? 'regular') === 'regular')>{{ __('Regular (0)') }}</option>
                                                                     <option value="bad" @selected($s->behavior === 'bad')>{{ __('Mal comportamiento (-10)') }}</option>
@@ -537,7 +575,7 @@
                                                             <label>
                                                                 {{ __('Asistencia') }}
                                                                 <select name="attended">
-                                                                    <option value="">{{ __('Sin cambios') }}</option>
+                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
                                                                     <option value="1" @selected($s->attended === true)>{{ __('Confirmar asistencia (+10)') }}</option>
                                                                     <option value="0" @selected($s->attended === false)>{{ __('Marcar como ausente') }}</option>
                                                                 </select>
@@ -552,7 +590,7 @@
                                                             <label>
                                                                 {{ __('Comportamiento') }}
                                                                 <select name="behavior">
-                                                                    <option value="">{{ __('Sin cambios') }}</option>
+                                                                    <option value="_keep_">{{ __('Sin cambios') }}</option>
                                                                     <option value="good" @selected($s->behavior === 'good')>{{ __('Buen comportamiento (+10)') }}</option>
                                                                     <option value="regular" @selected(($s->behavior ?? 'regular') === 'regular')>{{ __('Regular (0)') }}</option>
                                                                     <option value="bad" @selected($s->behavior === 'bad')>{{ __('Mal comportamiento (-10)') }}</option>

@@ -22,6 +22,14 @@ class AttendanceController extends Controller
         $user = $request->user();
         abort_unless($user, 403);
 
+        // Normalizamos selects con valor "sin cambios" antes de validar.
+        if ($request->input('attended') === '_keep_') {
+            $request->request->remove('attended');
+        }
+        if ($request->input('behavior') === '_keep_') {
+            $request->request->remove('behavior');
+        }
+
         $isOwner = (int) ($mesa->created_by ?? 0) === (int) $user->id;
         $isManager = (int) ($mesa->manager_id ?? 0) === (int) $user->id;
         $isAdmin = (string) ($user->role ?? '') === 'admin';

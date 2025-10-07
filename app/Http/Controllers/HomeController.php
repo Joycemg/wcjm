@@ -52,6 +52,9 @@ class HomeController extends Controller
                         'opens_at',
                         'created_at',
                         'updated_at',
+                        'manager_id',
+                        'manager_counts_as_player',
+                        'created_by',
                     ])
                     ->withCount([
                         // consistente con el resto: sólo signups contados
@@ -97,10 +100,31 @@ class HomeController extends Controller
         $hasMesaCardPartial = ViewFacade::exists('mesas._card') || ViewFacade::exists('tables._card');
         $latestTables = $hasMesaCardPartial ? collect() : $this->latestTablesFallback();
 
+        $myMesaContext = [
+            'notesUrl' => null,
+            'canSeeNotes' => false,
+            'isManager' => false,
+            'isOwner' => false,
+        ];
+
+        if ($auth && $myMesa) {
+            $isManager = (int) $myMesa->manager_id === (int) $auth->id;
+            $isOwner = (int) $myMesa->created_by === (int) $auth->id;
+            $isAdmin = ($auth->role ?? null) === 'admin';
+            $myMesaContext['isManager'] = $isManager;
+            $myMesaContext['isOwner'] = $isOwner;
+            $isParticipant = true; // el usuario llegó aquí por tener una inscripción vigente
+            $myMesaContext['canSeeNotes'] = Route::has('mesas.notes') && ($isManager || $isOwner || $isAdmin || $isParticipant);
+            if ($myMesaContext['canSeeNotes']) {
+                $myMesaContext['notesUrl'] = route('mesas.notes', $myMesa);
+            }
+        }
+
         return view('home', [
             'myMesa' => $myMesa,
             'hasMesaCardPartial' => $hasMesaCardPartial,
             'latestTables' => $latestTables,
+            'myMesaContext' => $myMesaContext,
         ]);
     }
 

@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Str;
 
 class GameTableController extends Controller
 {
@@ -101,13 +102,16 @@ class GameTableController extends Controller
         $waitlist = $signups->slice($capacity)->values()->take($waitlistMax);
 
         $auth = $this->optionalUser(request()); // ← ?User
-        $alreadySigned = $auth ? $mesa->signups()->where('user_id', $auth->id)->exists() : false;
+        $context = $this->mesaUserContext($auth, $mesa);
+        $alreadySigned = $context['isSigned'];
         $myMesaId = $auth ? Signup::where('user_id', $auth->id)->value('game_table_id') : null;
 
-        $isOwner = $auth ? ((int) $mesa->created_by === (int) $auth->id) : false;
-        $isManager = $auth ? ((int) $mesa->manager_id === (int) $auth->id) : false;
-        $isAdmin = $auth ? (($auth->role ?? null) === 'admin') : false;
+        $isOwner = $context['isOwner'];
+        $isManager = $context['isManager'];
+        $isAdmin = $context['isAdmin'];
         $canManageHonor = $isOwner || $isManager || $isAdmin;
+        $canViewNotes = $context['isSigned'] || $isOwner || $isManager || $isAdmin;
+        $managerCountsAsPlayer = (bool) $mesa->manager_counts_as_player;
 
         return view(
             $this->pickView(['mesas.show', 'tables.show']),
@@ -120,9 +124,75 @@ class GameTableController extends Controller
                 'isOwner',
                 'isManager',
                 'isAdmin',
-                'canManageHonor'
+                'canManageHonor',
+                'canViewNotes',
+                'managerCountsAsPlayer'
             )
         );
+    }
+
+    public function notes(Request $request, GameTable $mesa): ViewContract
+    {
+        $auth = $this->requireUser($request);
+        $context = $this->mesaUserContext($auth, $mesa);
+
+        abort_unless($context['isSigned'] || $context['isOwner'] || $context['isManager'] || $context['isAdmin'], 403);
+
+        $mesa->loadMissing([
+            'manager:id,name,username,email,avatar_path,updated_at',
+            'creator:id,name,username,email,avatar_path,updated_at',
+        ]);
+
+        $players = $mesa->signups()
+            ->with(['user:id,username,name,email,avatar_path,updated_at'])
+            ->orderByDesc('is_manager')
+            ->orderBy('created_at')
+            ->get();
+
+        $note = old('manager_note', (string) ($mesa->manager_note ?? ''));
+        $canEdit = $context['isManager'] || $context['isOwner'] || $context['isAdmin'];
+
+        return view(
+            $this->pickView(['mesas.notes', 'tables.notes']),
+            compact('mesa', 'players', 'note', 'canEdit') + $context
+        );
+    }
+
+    public function updateNotes(Request $request, GameTable $mesa): RedirectResponse
+    {
+        $auth = $this->requireUser($request);
+        $context = $this->mesaUserContext($auth, $mesa);
+        abort_unless($context['isManager'] || $context['isOwner'] || $context['isAdmin'], 403);
+
+        $data = $request->validate([
+            'manager_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $note = isset($data['manager_note']) ? Str::of($data['manager_note'])->trim()->toString() : null;
+        $mesa->manager_note = $note === '' ? null : $note;
+        $mesa->save();
+
+        return redirect()->route('mesas.notes', $mesa)->with('ok', 'Nota de la mesa actualizada.');
+    }
+
+    public function updateManagerPlaying(Request $request, GameTable $mesa): RedirectResponse
+    {
+        $auth = $this->requireUser($request);
+        $context = $this->mesaUserContext($auth, $mesa);
+        abort_unless($context['isManager'] || $context['isAdmin'], 403);
+
+        $data = $request->validate([
+            'playing' => ['required', 'boolean'],
+        ]);
+
+        $mesa->manager_counts_as_player = (bool) $data['playing'];
+        $mesa->save();
+
+        $message = $mesa->manager_counts_as_player
+            ? 'Volviste a figurar como jugador.'
+            : 'Quedaste como encargado sin sumar un lugar de jugador.';
+
+        return back()->with('ok', $message);
     }
 
     /* ========================= Crear / Guardar ========================= */
@@ -361,6 +431,28 @@ class GameTableController extends Controller
         $tz = $this->tz();
         $c = Carbon::parse($value, $tz);
         return $c->setTime((int) $c->format('H'), (int) $c->format('i'), 0);
+    }
+
+    /**
+     * Información de contexto para el usuario autenticado respecto a una mesa.
+     *
+     * @return array{isOwner:bool,isManager:bool,isAdmin:bool,isSigned:bool}
+     */
+    private function mesaUserContext(?User $auth, GameTable $mesa): array
+    {
+        $isOwner = $auth ? ((int) $mesa->created_by === (int) $auth->id) : false;
+        $isManager = $auth ? ((int) $mesa->manager_id === (int) $auth->id) : false;
+        $isAdmin = $auth ? (($auth->role ?? null) === 'admin') : false;
+
+        $isSigned = false;
+        if ($auth) {
+            $isSigned = Signup::query()
+                ->where('game_table_id', (int) $mesa->id)
+                ->where('user_id', (int) $auth->id)
+                ->exists();
+        }
+
+        return compact('isOwner', 'isManager', 'isAdmin', 'isSigned');
     }
 
     private function storeImageIfAny(Request $request): ?string

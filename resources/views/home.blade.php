@@ -13,13 +13,26 @@
 .home-wrap{max-width:960px;margin-inline:auto;padding:1rem}
 .card-pad{padding:1rem}
 .section{margin-top:1rem}
-.home-hero{display:flex;flex-direction:column;gap:.75rem}
+.home-hero{display:grid;gap:1.5rem;grid-template-columns:minmax(0,1fr) minmax(0,320px);align-items:flex-start}
+.home-hero-main{display:flex;flex-direction:column;gap:1rem}
 .home-title{margin:.2rem 0;color:var(--maroon);line-height:1.15}
 .home-sub{margin:0;color:var(--muted)}
 .link{color:var(--maroon);text-decoration:none}
 .link:hover{text-decoration:underline}
 .home-actions{display:flex;gap:.6rem;flex-wrap:wrap}
-.home-divider{height:1px;background:var(--border);margin:.5rem 0 1rem}
+.home-benefits{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}
+.home-benefits li{display:flex;gap:.5rem;align-items:flex-start;color:var(--muted)}
+.home-benefits li span:first-child{font-size:1.2rem;line-height:1.5}
+.home-benefits strong{color:var(--maroon)}
+.home-hero-aside{padding:1rem;border:1px dashed var(--border);border-radius:.75rem;display:flex;flex-direction:column;gap:.75rem;background:rgba(123,45,38,.03)}
+.home-hero-aside h2{margin:0;color:var(--maroon)}
+.home-hero-aside ul{list-style:none;margin:0;padding:0;display:grid;gap:.5rem;color:var(--muted);font-size:.95rem}
+.home-hero-aside li{display:flex;gap:.4rem;align-items:flex-start}
+.home-hero-aside .emoji{font-size:1.1rem;line-height:1.4}
+.home-tips{display:grid;gap:1rem;margin-top:1rem;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.home-tip{padding:1rem;border:1px solid var(--border);border-radius:.75rem;display:flex;flex-direction:column;gap:.5rem;background:var(--card,#fff)}
+.home-tip h3{margin:0;color:var(--maroon)}
+.home-tip p{margin:0;color:var(--muted);font-size:.95rem}
 
 .mesa-card{display:flex;gap:1rem;align-items:flex-start}
 .mesa-thumb{flex:0 0 160px;border-radius:.6rem;overflow:hidden;border:1px solid var(--border);background:#f8f9fa}
@@ -55,6 +68,10 @@
   .mesa-thumb img{height:180px}
 }
 
+@media (max-width:860px){
+  .home-hero{grid-template-columns:1fr}
+}
+
 @media (prefers-color-scheme: dark){
   :root{--border:#2d2f33; --muted:#a7b0ba}
   .home-divider{background:#2d2f33}
@@ -70,14 +87,20 @@
 
 @section('content')
 <main class="home-wrap" aria-labelledby="home-title">
+  @php $myMesaContext = $myMesaContext ?? []; @endphp
   {{-- HERO --}}
-  <section class="card home-hero card-pad">
-    <h1 id="home-title" class="home-title">Bienvenid@ a {{ config('app.name', 'La Taberna') }}</h1>
-    <p class="home-sub">Organizá partidas, descubrí mesas abiertas y sumate a la comunidad.</p>
+  <section class="card card-pad home-hero">
+    <div class="home-hero-main">
+      <h1 id="home-title" class="home-title">Bienvenid@ a {{ config('app.name', 'La Taberna') }}</h1>
+      <p class="home-sub">Organizá partidas, descubrí mesas abiertas y sumate a la comunidad.</p>
 
-    <div class="home-divider" role="separator" aria-hidden="true"></div>
+      <ul class="home-benefits">
+        <li><span>🎲</span> <span>{{ __('Armá mesas y administrá inscripciones sin planillas externas.') }}</span></li>
+        <li><span>📝</span> <span>{{ __('Compartí notas privadas con tus jugadores y dejá todo documentado.') }}</span></li>
+        <li><span>🏅</span> <span>{{ __('Seguimiento de asistencia y honor automatizado para cada jugador.') }}</span></li>
+      </ul>
 
-    @php
+      @php
       $mesasIndexUrl  = \Illuminate\Support\Facades\Route::has('mesas.index')  ? route('mesas.index')  : url('/mesas');
       $mesasCreateUrl = \Illuminate\Support\Facades\Route::has('mesas.create') ? route('mesas.create') : url('/mesas/create');
       $panelUrl       = \Illuminate\Support\Facades\Route::has('dashboard')    ? route('dashboard')    : url('/panel');
@@ -85,26 +108,34 @@
       $registerUrl    = \Illuminate\Support\Facades\Route::has('register')     ? route('register')     : url('/register');
     @endphp
 
-    <nav class="home-actions" aria-label="Acciones principales">
-      @auth
-        {{-- Ir a mi mesa (si no hay, el controlador redirige) --}}
-        @if(\Illuminate\Support\Facades\Route::has('mesas.mine'))
-          <a class="btn" href="{{ route('mesas.mine') }}" aria-label="Ir a mi mesa">Ir a mi mesa</a>
+      <nav class="home-actions" aria-label="Acciones principales">
+        @auth
+          <a class="btn" href="{{ $mesasIndexUrl }}">{{ __('Mis mesas') }}</a>
+
+          {{-- Mostrar "Crear mesa" según policy (GameTablePolicy@create) --}}
+          @can('create', \App\Models\GameTable::class)
+            <a class="btn gold" href="{{ $mesasCreateUrl }}">➕ {{ __('Crear mesa') }}</a>
+          @endcan
+
+          <a class="btn" href="{{ $panelUrl }}">{{ __('Ir a mi panel') }}</a>
         @else
-          <a class="btn" href="{{ $mesasIndexUrl }}">Mis mesas</a>
+          <a class="btn" href="{{ $registerUrl }}">{{ __('Crear cuenta') }}</a>
+          <a class="btn" href="{{ $loginUrl }}">{{ __('Entrar') }}</a>
+        @endauth
+      </nav>
+    </div>
+
+    <aside class="home-hero-aside">
+      <h2>{{ __('Todo lo importante en un solo lugar') }}</h2>
+      <ul>
+        <li><span class="emoji">✅</span> <span>{{ __('Confirmá asistencia y comportamiento con un clic por jugador.') }}</span></li>
+        <li><span class="emoji">🔐</span> <span>{{ __('Notas visibles solo para inscriptos y encargados.') }}</span></li>
+        <li><span class="emoji">📈</span> <span>{{ __('Seguimiento de honor y estadísticas al día.') }}</span></li>
+        @if(($myMesaContext['canSeeNotes'] ?? false) && !empty($myMesaContext['notesUrl']))
+          <li><span class="emoji">🗒️</span> <span><a class="link" href="{{ $myMesaContext['notesUrl'] }}">{{ __('Acceder a las notas de mi mesa') }}</a></span></li>
         @endif
-
-        {{-- Mostrar "Crear mesa" según policy (GameTablePolicy@create) --}}
-        @can('create', \App\Models\GameTable::class)
-          <a class="btn gold" href="{{ $mesasCreateUrl }}">➕ Crear mesa</a>
-        @endcan
-
-        <a class="btn" href="{{ $panelUrl }}">Ir a mi panel</a>
-      @else
-        <a class="btn" href="{{ $registerUrl }}">Crear cuenta</a>
-        <a class="btn" href="{{ $loginUrl }}">Entrar</a>
-      @endauth
-    </nav>
+      </ul>
+    </aside>
   </section>
 
   {{-- Tu mesa actual (si existe) --}}
@@ -197,6 +228,9 @@
 
               <div class="mesa-actions">
                 <a class="btn" href="{{ $mesaShowUrl }}">Ver mesa</a>
+                @if(($myMesaContext['canSeeNotes'] ?? false) && !empty($myMesaContext['notesUrl']))
+                  <a class="btn" href="{{ $myMesaContext['notesUrl'] }}">Notas de la mesa</a>
+                @endif
                 <a class="btn" href="{{ $mesaShowUrl }}#jugadores">Ver jugadores</a>
                 <a class="btn" href="{{ $mesasIndexUrl }}">Explorar otras</a>
               </div>
@@ -267,6 +301,24 @@
         </div>
       @endif
     @endif
+  </section>
+
+  <section class="card card-pad section">
+    <h2 style="margin-top:0;color:var(--maroon)">{{ __('Herramientas para encargados') }}</h2>
+    <div class="home-tips">
+      <article class="home-tip">
+        <h3>🗒️ {{ __('Notas compartidas') }}</h3>
+        <p>{{ __('Guardá recordatorios, consignas o enlaces especiales y compartilos solo con tu mesa.') }}</p>
+      </article>
+      <article class="home-tip">
+        <h3>👥 {{ __('Control de asistencia') }}</h3>
+        <p>{{ __('Confirmá asistencia o marcá ausencias sin salir de la plataforma y sumá honor automáticamente.') }}</p>
+      </article>
+      <article class="home-tip">
+        <h3>🧙 {{ __('Encargado siempre presente') }}</h3>
+        <p>{{ __('Figurás como jugador por defecto y podés liberar tu lugar con un solo clic si preferís dirigir.') }}</p>
+      </article>
+    </div>
   </section>
 
   {{-- DEBUG (solo con APP_DEBUG=true) --}}
