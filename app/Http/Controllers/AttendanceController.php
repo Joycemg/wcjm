@@ -22,7 +22,8 @@ class AttendanceController extends Controller
     public function update(Request $request, GameTable $mesa, Signup $signup): RedirectResponse
     {
         $user = $request->user();
-        abort_unless($user, 403);
+        abort_unless($user instanceof User, 403);
+        \assert($user instanceof User);
 
         // Normalizamos selects con valor "sin cambios" antes de validar.
         if ($request->input('attended') === '_keep_') {
