@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        if (Schema::hasTable('vote_histories')) {
+            return;
+        }
+
         Schema::create('vote_histories', function (Blueprint $table) {
             $table->id();
 
