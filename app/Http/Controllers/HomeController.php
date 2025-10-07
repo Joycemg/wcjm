@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\GameTable;
 use App\Models\Signup;
-use App\Models\User; // ← para tipar el auth user y evitar warnings
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
@@ -148,13 +147,6 @@ class HomeController extends Controller
             : Carbon::parse((string) $opensRaw, $tz);
 
         return $this->nowTz()->greaterThanOrEqualTo($openAt);
-    }
-
-    /** Devuelve el usuario autenticado tipado o null (evita warning del IDE) */
-    private function optionalUser(Request $request): ?User
-    {
-        $u = $request->user();
-        return $u instanceof User ? $u : null;
     }
 
     /**
