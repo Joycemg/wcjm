@@ -74,7 +74,7 @@
                             <a href="{{ route('profile.show', $u) }}">{{ $u->name ?? 'Usuario ' . $u->id }}</a>
                             @if($u->username) <span class="pill">@{{ $u->username }}</span> @endif
                         </td>
-                        <td style="text-align:right">{{ (int) $u->honor_total }}</td>
+                        <td style="text-align:right">{{ number_format((int) $u->honor_total, 0, ',', '.') }}</td>
                     </tr>
                 @endforeach
             </tbody>
