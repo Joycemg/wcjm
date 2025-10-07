@@ -167,42 +167,66 @@ class AttendanceController extends Controller
                 }
             }
 
-            // 2) No show: -20 (solo si NO vino attended=1 en esta misma request)
-            if (($data['no_show'] ?? false) && !($data['attended'] ?? false)) {
-                if ($hasLegacyNoShowAt || $hasLegacyNoShowBy) {
-                    $nowStamp ??= now();
-                    if ($hasLegacyNoShowAt) {
-                        $row->no_show_at = $nowStamp;
+            // 2) No show: -20 (solo si NO vino attended=1 en esta misma request).
+            //    Además, si la request indica no_show=0, eliminamos la penalización previa.
+            if (array_key_exists('no_show', $data)) {
+                $noShowSlug = "mesa:{$mesaId}:signup:{$signupId}:no_show";
+                $wantsNoShow = (bool) $data['no_show'];
+
+                if ($wantsNoShow && !($data['attended'] ?? false)) {
+                    if ($hasLegacyNoShowAt || $hasLegacyNoShowBy) {
+                        $nowStamp ??= now();
+                        if ($hasLegacyNoShowAt) {
+                            $row->no_show_at = $nowStamp;
+                            $dirty = true;
+                        }
+                        if ($hasLegacyNoShowBy) {
+                            $row->no_show_by = $user->id;
+                            $dirty = true;
+                        }
+                        if ($hasLegacyConfirmedAt && $row->attendance_confirmed_at !== null) {
+                            $row->attendance_confirmed_at = null;
+                            $dirty = true;
+                        }
+                        if ($hasLegacyConfirmedBy && $row->attendance_confirmed_by !== null) {
+                            $row->attendance_confirmed_by = null;
+                            $dirty = true;
+                        }
+                        if ($hasAttendedColumn && $row->attended !== false) {
+                            $row->attended = false;
+                            $dirty = true;
+                        }
+                        if ($dirty) {
+                            $row->save();
+                            $dirty = false;
+                        }
+                    }
+
+                    $honorTouched = $this->addHonorSafe(
+                        $target,
+                        -20,
+                        HonorEvent::R_NO_SHOW,
+                        ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
+                        $noShowSlug
+                    ) || $honorTouched;
+                }
+
+                if (!$wantsNoShow) {
+                    if ($hasLegacyNoShowAt && $row->no_show_at !== null) {
+                        $row->no_show_at = null;
                         $dirty = true;
                     }
-                    if ($hasLegacyNoShowBy) {
-                        $row->no_show_by = $user->id;
-                        $dirty = true;
-                    }
-                    if ($hasLegacyConfirmedAt && $row->attendance_confirmed_at !== null) {
-                        $row->attendance_confirmed_at = null;
-                        $dirty = true;
-                    }
-                    if ($hasLegacyConfirmedBy && $row->attendance_confirmed_by !== null) {
-                        $row->attendance_confirmed_by = null;
-                        $dirty = true;
-                    }
-                    if ($hasAttendedColumn && $row->attended !== false) {
-                        $row->attended = false;
+                    if ($hasLegacyNoShowBy && $row->no_show_by !== null) {
+                        $row->no_show_by = null;
                         $dirty = true;
                     }
                     if ($dirty) {
                         $row->save();
+                        $dirty = false;
                     }
-                }
 
-                $honorTouched = $this->addHonorSafe(
-                    $target,
-                    -20,
-                    HonorEvent::R_NO_SHOW,
-                    ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
-                    "mesa:{$mesaId}:signup:{$signupId}:no_show"
-                ) || $honorTouched;
+                    $honorTouched = $this->removeHonorEventSafe($target, $noShowSlug) || $honorTouched;
+                }
             }
 
             // 3) Comportamiento: transición entre good/regular/bad con undos correctos
