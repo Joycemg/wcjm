@@ -21,7 +21,9 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Righteous&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Unna:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ asset('css/base.css') }}">
 
     @if ($hasViteBuild)
         {{-- Usa assets generados por Vite si existen --}}
@@ -35,115 +37,127 @@
     @stack('head')
 
     <style>
-        :root {
-            --muted: #4c566a;
-            --maroon: #b3472d;
-            --border: #d8dee9;
-            --night: #1f2937;
-            --amber: #fbbf24;
-            --emerald: #34d399;
-        }
-
-        .muted {
-            color: var(--muted)
-        }
-
-        .pill {
-            display: inline-block;
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: .125rem .5rem;
-            font-size: .75rem
-        }
-
         body {
             font-family: 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background:
-                radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.25) 0, rgba(255, 255, 255, 0) 60%),
-                radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.25) 0, rgba(255, 255, 255, 0) 60%),
-                linear-gradient(135deg, #0f172a 0%, #1e293b 35%, #273549 70%, #2f3f57 100%);
-            color: #1f2937;
+            background: var(--bg);
+            background-image:
+                radial-gradient(circle at 0% 0%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 55%),
+                radial-gradient(circle at 100% 0%, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0) 45%),
+                linear-gradient(180deg, rgba(255, 247, 238, .35), rgba(255, 247, 238, 0));
+            color: var(--ink);
             min-height: 100vh;
         }
 
+        .page-body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1,
+        h2,
+        h3,
         .app-title {
-            font-family: 'Righteous', cursive;
-            letter-spacing: .02em;
+            font-family: 'Unna', 'Times New Roman', serif;
+            color: var(--maroon);
+            letter-spacing: .04em;
         }
 
         .container {
             max-width: 1100px;
             margin: 0 auto;
-            padding: 1.25rem;
+            padding: clamp(.9rem, 3vw, 1.4rem);
         }
 
-        .btn {
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: linear-gradient(135deg, var(--maroon), var(--maroon-press));
+            color: #fff;
+            box-shadow: 0 14px 32px rgba(123, 30, 30, .28);
+        }
+
+        .site-header .container {
+            display: flex;
+            align-items: center;
+            gap: clamp(.75rem, 3vw, 1.5rem);
+        }
+
+        .brand {
             display: inline-flex;
             align-items: center;
-            gap: .5rem;
-            border-radius: 999px;
-            padding: .55rem 1.1rem;
-            font-weight: 600;
-            letter-spacing: .01em;
-            background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,0));
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
-            transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+            gap: .75rem;
+            color: inherit;
             text-decoration: none;
+            font-weight: 700;
         }
 
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.3);
-            background: linear-gradient(135deg, rgba(255,255,255,.24), rgba(255,255,255,0.05));
+        .brand-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            background: radial-gradient(circle at 30% 30%, #fff5d6, #f1c56d 65%, #cf9f41 100%);
+            color: var(--maroon);
+            box-shadow: 0 10px 22px rgba(0, 0, 0, .22);
+            font-size: 1.55rem;
         }
 
-        .btn.gold {
-            background: linear-gradient(135deg, #fbbf24, #f97316);
-            border-color: rgba(251, 191, 36, .8);
-            color: #1f2937;
-            box-shadow: 0 8px 18px rgba(251, 191, 36, 0.35);
+        .app-title {
+            font-size: clamp(1.4rem, 3vw, 1.7rem);
+            color: #fff7ee;
+            text-transform: uppercase;
         }
 
-        .btn.gold:hover {
-            background: linear-gradient(135deg, #facc15, #fb923c);
+        .main-nav {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+            flex-wrap: wrap;
+            margin-left: auto;
         }
 
-        .btn.red {
-            background: linear-gradient(135deg, #f87171, #ef4444);
-            border-color: rgba(239, 68, 68, .85);
-            box-shadow: 0 8px 18px rgba(248, 113, 113, 0.35);
-            color: #fff;
+        .site-header .btn {
+            background: rgba(255, 255, 255, .12);
+            border-color: rgba(255, 255, 255, .3);
+            color: #fff7ee;
+            font-weight: 600;
+            transition: background .2s ease, transform .2s ease;
         }
 
-        .btn.green {
-            background: linear-gradient(135deg, #34d399, #059669);
-            border-color: rgba(5, 150, 105, .75);
-            box-shadow: 0 8px 18px rgba(52, 211, 153, 0.35);
-            color: #032b1f;
+        .site-header .btn:hover {
+            background: rgba(255, 255, 255, .22);
+            transform: translateY(-1px);
         }
 
-        .card {
-            background: linear-gradient(145deg, rgba(255,255,255,.95), rgba(255,255,255,.85));
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            border-radius: 1.25rem;
-            padding: 1.25rem;
-            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.22);
-            backdrop-filter: blur(6px);
+        .site-header .btn.gold {
+            background: linear-gradient(135deg, var(--gold), var(--gold-press));
+            border-color: transparent;
+            color: var(--ink);
+            box-shadow: 0 10px 22px rgba(200, 162, 76, .36);
         }
 
-        .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 999px;
-            object-fit: cover
+        .site-header .btn.gold:hover {
+            transform: translateY(-1px) scale(1.01);
+        }
+
+        .site-main {
+            flex: 1;
+            padding: clamp(1.8rem, 5vw, 3rem) 0 clamp(2.8rem, 6vw, 4rem);
+        }
+
+        .site-main .container {
+            display: grid;
+            gap: clamp(1rem, 3vw, 1.6rem);
         }
 
         .grid-2 {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 1rem
+            gap: clamp(1.2rem, 4vw, 1.8rem);
         }
 
         @media (min-width: 900px) {
@@ -151,48 +165,93 @@
                 grid-template-columns: 2fr 1fr;
             }
         }
+
+        .flash {
+            padding: .85rem 1rem;
+            border-radius: 1rem;
+            border: 1px solid var(--line);
+            background: var(--card, var(--paper));
+            box-shadow: 0 12px 28px rgba(78, 41, 27, .12);
+            font-weight: 600;
+        }
+
+        .flash-ok {
+            background: #e9f7ef;
+            border-color: #bfe6ca;
+            color: #165534;
+        }
+
+        .flash-err {
+            background: #fcecec;
+            border-color: #f3b9b9;
+            color: var(--maroon);
+        }
+
+        .site-footer {
+            background: linear-gradient(135deg, var(--maroon), var(--maroon-press));
+            color: #f8ede0;
+            text-align: center;
+            padding: 1.75rem 1rem;
+            border-top: 1px solid rgba(0, 0, 0, .08);
+            font-size: .95rem;
+            letter-spacing: .03em;
+        }
+
+        .site-footer a {
+            color: inherit;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 640px) {
+            .site-header .container {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .main-nav {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 
-<body class="bg-gray-50 text-gray-900">
-    <header class="border-b" style="border-color: rgba(255,255,255,.08); background: linear-gradient(135deg, rgba(15,23,42,.85), rgba(30,41,59,.85)); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 20;">
-        <div class="container flex items-center justify-between" style="gap: 1.5rem;">
-            <a href="{{ route('home') }}"
-               class="font-bold text-lg app-title text-white flex items-center gap-2">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#fbbf24,#f97316);color:#111827;box-shadow:0 8px 18px rgba(251,191,36,.35);">🎲</span>
-                {{ config('app.name', 'La Taberna') }}
+<body class="page-body">
+    <header class="site-header" role="banner">
+        <div class="container">
+            <a href="{{ route('home') }}" class="brand">
+                <span class="brand-badge">🍷</span>
+                <span class="app-title">{{ config('app.name', 'La Taberna') }}</span>
             </a>
-            <nav class="flex items-center gap-2">
-                <a class="btn"
-                   href="{{ route('mesas.index') }}">Mesas</a>
+            <nav class="main-nav" aria-label="{{ __('Principal') }}">
+                <a class="btn" href="{{ route('mesas.index') }}">Mesas</a>
 
                 @can('manage-tables')
                     @if(\Illuminate\Support\Facades\Route::has('mesas.create'))
-                        <a class="btn gold"
-                           href="{{ route('mesas.create') }}">➕ Nueva mesa</a>
+                        <a class="btn gold" href="{{ route('mesas.create') }}">➕ Nueva mesa</a>
                     @endif
                 @endcan
 
                 @auth
-                    <a class="btn"
-                       href="{{ route('dashboard') }}">Panel</a>
+                    <a class="btn" href="{{ route('dashboard') }}">Panel</a>
                 @endauth
             </nav>
         </div>
     </header>
 
-    <main class="container" style="padding-top: 2.5rem; padding-bottom: 3rem;">
-        @if (session('ok'))
-            <div class="card mb-3 bg-green-50 border-green-300">{{ session('ok') }}</div>
-        @endif
-        @if (session('err'))
-            <div class="card mb-3 bg-red-50 border-red-300">{{ session('err') }}</div>
-        @endif
+    <main class="site-main">
+        <div class="container">
+            @if (session('ok'))
+                <div class="flash flash-ok" role="status">{{ session('ok') }}</div>
+            @endif
+            @if (session('err'))
+                <div class="flash flash-err" role="alert">{{ session('err') }}</div>
+            @endif
 
-        @yield('content')
+            @yield('content')
+        </div>
     </main>
 
-    <footer class="mt-8 py-6 text-center text-sm text-gray-200" style="border-top: 1px solid rgba(255,255,255,.1); background: linear-gradient(135deg, rgba(15,23,42,.85), rgba(30,41,59,.85));">
+    <footer class="site-footer">
         © {{ date('Y') }} {{ config('app.name', 'La Taberna') }} · Comunidad de Juegos de Mesa
     </footer>
 
