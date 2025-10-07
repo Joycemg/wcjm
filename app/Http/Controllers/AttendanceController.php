@@ -149,6 +149,11 @@ class AttendanceController extends Controller
                         ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                         "mesa:{$mesaId}:signup:{$signupId}:attended"
                     ) || $honorTouched;
+
+                    $honorTouched = $this->removeHonorEventSafe(
+                        $target,
+                        "mesa:{$mesaId}:signup:{$signupId}:attended:undo"
+                    ) || $honorTouched;
                 }
 
                 if (!$nowAttended && $prevAttended === true) {
@@ -220,6 +225,11 @@ class AttendanceController extends Controller
                         "mesa:{$mesaId}:signup:{$signupId}:behavior:good"
                     ) || $honorTouched;
 
+                    $honorTouched = $this->removeHonorEventSafe(
+                        $target,
+                        "mesa:{$mesaId}:signup:{$signupId}:behavior:undo:good"
+                    ) || $honorTouched;
+
                 } elseif ($newBehavior === 'bad') {
                     if ($prevBehavior === 'good') {
                         $honorTouched = $this->addHonorSafe(
@@ -236,6 +246,11 @@ class AttendanceController extends Controller
                         HonorEvent::R_BEHAV_BAD,
                         ['mesa_id' => $mesaId, 'signup_id' => $signupId, 'by' => $user->id],
                         "mesa:{$mesaId}:signup:{$signupId}:behavior:bad"
+                    ) || $honorTouched;
+
+                    $honorTouched = $this->removeHonorEventSafe(
+                        $target,
+                        "mesa:{$mesaId}:signup:{$signupId}:behavior:undo:bad"
                     ) || $honorTouched;
 
                 } else { // regular
@@ -288,6 +303,32 @@ class AttendanceController extends Controller
         } catch (QueryException $e) {
             if ($this->isMissingHonorTable($e)) {
                 // Entornos sin la tabla honor_events: omite silenciosamente.
+                return false;
+            }
+
+            throw $e;
+        }
+    }
+
+    private function removeHonorEventSafe(User $user, string $slug): bool
+    {
+        $slug = trim($slug);
+        if ($slug === '') {
+            return false;
+        }
+
+        try {
+            if (method_exists($user, 'removeHonorEventBySlug')) {
+                return $user->removeHonorEventBySlug($slug);
+            }
+
+            return HonorEvent::query()
+                ->where('user_id', $user->id)
+                ->where('slug', $slug)
+                ->limit(1)
+                ->delete() > 0;
+        } catch (QueryException $e) {
+            if ($this->isMissingHonorTable($e)) {
                 return false;
             }
 
