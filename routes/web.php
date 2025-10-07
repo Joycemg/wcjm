@@ -47,8 +47,8 @@ Route::name('mesas.')->prefix('mesas')->group(function () use ($authVerified) {
     Route::get('/', [GameTableController::class, 'index'])->name('index');
     Route::get('/{mesa}', [GameTableController::class, 'show'])->whereNumber('mesa')->name('show');
 
-    // Gestión (solo autenticados + permiso 'manage-tables')
-    Route::middleware(array_merge($authVerified, ['admin.only:can:manage-tables']))->group(function () {
+    // Gestión (solo autenticados; el controlador valida dueño/encargado/admin)
+    Route::middleware($authVerified)->group(function () {
         Route::get('/create', [GameTableController::class, 'create'])->name('create');
         Route::post('/', [GameTableController::class, 'store'])->name('store');
 
