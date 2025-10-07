@@ -18,7 +18,7 @@
         .card {
             background: #fff;
             border: 1px solid var(--border);
-            border-radius: .75rem;
+            border-radius: 0;
             padding: 1rem
         }
 
@@ -27,7 +27,7 @@
             gap: .5rem;
             align-items: center;
             border: 1px solid var(--border);
-            border-radius: .6rem;
+            border-radius: 0;
             padding: .5rem .9rem
         }
 
@@ -55,7 +55,7 @@
 
         @if ($errors->any())
             <div role="alert"
-                 style="margin:1rem 0;padding:.75rem;border:1px solid #f87171;border-radius:.5rem;background:#fff5f5;color:#7f1d1d">
+                 style="margin:1rem 0;padding:.75rem;border:1px solid #f87171;border-radius: 0;background:#fff5f5;color:#7f1d1d">
                 <strong style="display:block;margin-bottom:.25rem">{{ __('Revisá los campos:') }}</strong>
                 <ul style="margin:0;padding-left:1rem">
                     @foreach ($errors->all() as $err) <li>{{ $err }}</li> @endforeach
@@ -212,7 +212,7 @@
                         <img id="image-current"
                              src="{{ $mesa->image_url_resolved }}"
                              alt="{{ __('Imagen de :title', ['title' => $mesa->title]) }}"
-                             style="display:block;max-width:220px;height:auto;border-radius:.5rem;object-fit:cover"
+                             style="display:block;max-width:220px;height:auto;border-radius: 0;object-fit:cover"
                              loading="lazy"
                              decoding="async"
                              width="220"

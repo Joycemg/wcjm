@@ -29,7 +29,7 @@
             display: inline-block;
             padding: .1rem .5rem;
             border: 1px solid var(--border, #e5e7eb);
-            border-radius: 999px;
+            border-radius: 0;
             font-size: .85rem;
         }
 
@@ -53,7 +53,7 @@
         .empty-state {
             padding: 1.25rem;
             border: 1px dashed var(--border, #e5e7eb);
-            border-radius: .75rem;
+            border-radius: 0;
             background: rgba(243, 244, 246, .4);
             color: var(--muted, #6b7280);
         }

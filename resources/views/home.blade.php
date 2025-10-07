@@ -63,7 +63,8 @@
 
 .home-title {
   margin: .2rem 0;
-  font-family: 'Righteous', cursive;
+  font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-weight: 700;
   font-size: clamp(2.1rem, 4vw, 2.75rem);
   color: #fef3c7;
   text-shadow: 0 4px 12px rgba(15, 23, 42, 0.4);
@@ -105,7 +106,7 @@
   align-items: center;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
+  border-radius: 0;
   padding: .4rem .9rem;
   color: rgba(255, 255, 255, 0.9);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -121,7 +122,7 @@
 .home-hero-aside {
   padding: 1.35rem;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 1rem;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: .75rem;
@@ -159,7 +160,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 0;
   background: rgba(251, 191, 36, 0.2);
 }
 
@@ -172,7 +173,7 @@
 
 .home-tip {
   padding: 1.25rem;
-  border-radius: 1rem;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   gap: .6rem;
@@ -202,7 +203,7 @@
 
 .mesa-thumb {
   flex: 0 0 160px;
-  border-radius: .8rem;
+  border-radius: 0;
   overflow: hidden;
   border: 2px solid rgba(15, 23, 42, 0.12);
   background: rgba(15, 23, 42, 0.35);
@@ -243,7 +244,7 @@
 
 .pill {
   padding: .15rem .65rem;
-  border-radius: 999px;
+  border-radius: 0;
   border: 1px solid rgba(17, 24, 39, 0.12);
   font-size: .85rem;
   line-height: 1.5;
@@ -272,7 +273,7 @@
 .mesa-avatars .ava {
   width: 30px;
   height: 30px;
-  border-radius: 999px;
+  border-radius: 0;
   overflow: hidden;
   border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
@@ -305,14 +306,14 @@
   flex-direction: column;
   gap: .65rem;
   padding: 1.1rem;
-  border-radius: 1rem;
+  border-radius: 0;
   background: linear-gradient(160deg, rgba(255,255,255,0.95), rgba(226,232,240,0.85));
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 12px 22px rgba(15, 23, 42, 0.1);
 }
 
 .mesa-mini-thumb {
-  border-radius: .75rem;
+  border-radius: 0;
   overflow: hidden;
   border: 2px solid rgba(15, 23, 42, 0.12);
 }
@@ -348,7 +349,7 @@
 .cta-explore {
   padding: 1.15rem;
   border: 2px dashed rgba(251, 191, 36, 0.6);
-  border-radius: .9rem;
+  border-radius: 0;
   text-align: center;
   background: rgba(15, 23, 42, 0.75);
   color: rgba(255, 255, 255, 0.9);

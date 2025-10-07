@@ -62,7 +62,7 @@
         max-height: calc(100dvh - 2*var(--sheet-gutter));
         background: #fff;
         border: 1px solid var(--line);
-        border-radius: 1rem;
+        border-radius: 0;
         box-shadow: 0 20px 40px rgba(0, 0, 0, .18);
         overflow: auto;
         -webkit-overflow-scrolling: touch
@@ -86,7 +86,7 @@
         top: .4rem;
         width: 40px;
         height: 40px;
-        border-radius: 999px;
+        border-radius: 0;
         border: 0;
         background: transparent;
         cursor: pointer;
@@ -132,7 +132,7 @@
     .lt-cancel {
         background: transparent;
         border: 1px solid var(--line);
-        border-radius: .6rem;
+        border-radius: 0;
         padding: .6rem .9rem;
         cursor: pointer
     }
@@ -142,7 +142,7 @@
         width: 44px;
         height: 4px;
         background: var(--line);
-        border-radius: 999px;
+        border-radius: 0;
         margin: .35rem auto 0
     }
 
@@ -157,7 +157,7 @@
         padding: .6rem;
         border: 1px solid #F3B9B9;
         background: #FCECEC;
-        border-radius: .6rem;
+        border-radius: 0;
         color: #7f1d1d;
         font-size: .9rem
     }
@@ -172,7 +172,7 @@
         .lt-modal__panel {
             width: 100%;
             max-width: none;
-            border-radius: 1rem 1rem 0 0;
+            border-radius: 0;
             max-height: calc(100dvh - 10px - env(safe-area-inset-bottom, 0px));
             transform: translateY(8%);
             animation: lt-slide-up .18s ease-out forwards

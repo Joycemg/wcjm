@@ -37,7 +37,7 @@
         {{-- Errores de validación --}}
         @if ($errors->any())
             <div role="alert"
-                 style="margin:.75rem 0;padding:.75rem;border:1px solid #f87171;border-radius:.5rem;background:#fff5f5;color:#7f1d1d">
+                 style="margin:.75rem 0;padding:.75rem;border:1px solid #f87171;border-radius: 0;background:#fff5f5;color:#7f1d1d">
                 <strong style="display:block;margin-bottom:.25rem">{{ __('Revisá los campos:') }}</strong>
                 <ul style="margin:0;padding-left:1rem">
                     @foreach ($errors->all() as $err) <li>{{ $err }}</li> @endforeach
@@ -59,7 +59,7 @@
                 <img id="avatar-preview"
                      src="{{ $avatar }}"
                      alt="{{ __('Avatar de :name', ['name' => $auth->name ?? $auth->username ?? 'User']) }}"
-                     style="width:72px;height:72px;border-radius:50%;border:2px solid var(--line);object-fit:cover"
+                     style="width:72px;height:72px;border-radius: 0;border:2px solid var(--line);object-fit:cover"
                      width="72"
                      height="72"
                      loading="lazy"

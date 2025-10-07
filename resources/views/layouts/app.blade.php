@@ -21,7 +21,7 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Unna:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="{{ asset('css/base.css') }}">
 
@@ -38,14 +38,11 @@
 
     <style>
         body {
-            font-family: 'Nunito Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
             background: var(--bg);
-            background-image:
-                radial-gradient(circle at 0% 0%, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 55%),
-                radial-gradient(circle at 100% 0%, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0) 45%),
-                linear-gradient(180deg, rgba(255, 247, 238, .35), rgba(255, 247, 238, 0));
             color: var(--ink);
             min-height: 100vh;
+            line-height: 1.65;
         }
 
         .page-body {
@@ -58,9 +55,10 @@
         h2,
         h3,
         .app-title {
-            font-family: 'Unna', 'Times New Roman', serif;
+            font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
             color: var(--maroon);
-            letter-spacing: .04em;
+            font-weight: 700;
+            letter-spacing: .015em;
         }
 
         .container {
@@ -99,10 +97,10 @@
             justify-content: center;
             width: 46px;
             height: 46px;
-            border-radius: 14px;
-            background: radial-gradient(circle at 30% 30%, #fff5d6, #f1c56d 65%, #cf9f41 100%);
+            border-radius: 0;
+            background: linear-gradient(135deg, #f4d98a, #d7ae4f);
             color: var(--maroon);
-            box-shadow: 0 10px 22px rgba(0, 0, 0, .22);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, .16);
             font-size: 1.55rem;
         }
 
@@ -168,10 +166,10 @@
 
         .flash {
             padding: .85rem 1rem;
-            border-radius: 1rem;
+            border-radius: 0;
             border: 1px solid var(--line);
             background: var(--card, var(--paper));
-            box-shadow: 0 12px 28px rgba(78, 41, 27, .12);
+            box-shadow: 0 8px 16px rgba(38, 33, 30, .08);
             font-weight: 600;
         }
 

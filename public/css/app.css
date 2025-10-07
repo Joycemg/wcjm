@@ -1,14 +1,14 @@
 :root {
-    --bg: #F6EADF;
-    --card: #FFF7EE;
-    --ink: #2E2724;
-    --muted: #6F655E;
-    --line: #E2D3C2;
+    --bg: #F2EFEA;
+    --card: #FAF7F1;
+    --ink: #26211E;
+    --muted: #57514D;
+    --line: #D9CFC3;
     --maroon: #7B1E1E;
     --maroon-press: #671717;
     --gold: #C8A24C;
     --gold-press: #AD8C3D;
-    --focus: #2E6FEA22;
+    --focus: #2E6FEA33;
     --red: #C74242;
     --green: #2F855A;
 }
@@ -19,10 +19,10 @@
 
 body {
     margin: 0;
-    font-family: 'Nunito Sans', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
     background: var(--bg);
     color: var(--ink);
-    line-height: 1.6;
+    line-height: 1.65;
 }
 
 a {
@@ -79,7 +79,7 @@ a:hover {
     align-items: center;
     justify-content: center;
     gap: .55rem;
-    border-radius: .85rem;
+    border-radius: 0;
     padding: .55rem .95rem;
     border: 1px solid var(--line);
     background: var(--card);
@@ -89,7 +89,7 @@ a:hover {
     font-weight: 600;
     letter-spacing: .01em;
     transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
-    box-shadow: 0 8px 20px rgba(78, 41, 27, .08);
+    box-shadow: 0 6px 14px rgba(38, 33, 30, .08);
 }
 
 .btn:hover {
@@ -157,9 +157,9 @@ a:hover {
 .card {
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 1.1rem;
+    border-radius: 0;
     padding: clamp(.85rem, 2.5vw, 1.25rem);
-    box-shadow: 0 14px 32px rgba(78, 41, 27, .12);
+    box-shadow: 0 10px 20px rgba(38, 33, 30, .08);
 }
 
 .muted {
@@ -210,7 +210,7 @@ a:hover {
 .avatar {
     width: 40px;
     height: 40px;
-    border-radius: 999px;
+    border-radius: 0;
     object-fit: cover;
     border: 1px solid var(--line);
     background: #fff;

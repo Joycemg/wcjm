@@ -49,7 +49,7 @@
 
         .card {
             padding: 1rem;
-            border-radius: .75rem;
+            border-radius: 0;
             border: 1px solid var(--border);
             background: #fff
         }
@@ -59,7 +59,7 @@
             align-items: center;
             justify-content: center;
             padding: .1rem .45rem;
-            border-radius: 999px;
+            border-radius: 0;
             border: 1px solid var(--border);
             font-size: .8rem;
             color: var(--muted);
@@ -71,7 +71,7 @@
             width: 100%;
             min-height: 200px;
             padding: .75rem;
-            border-radius: .6rem;
+            border-radius: 0;
             border: 1px solid var(--border);
             resize: vertical;
             font: inherit;
@@ -95,7 +95,7 @@
         .row img {
             width: 36px;
             height: 36px;
-            border-radius: 50%;
+            border-radius: 0;
             object-fit: cover;
             border: 1px solid var(--border);
             display: block
@@ -106,7 +106,7 @@
             gap: .5rem;
             align-items: center;
             border: 1px solid var(--border);
-            border-radius: .6rem;
+            border-radius: 0;
             padding: .5rem .9rem
         }
 
@@ -161,7 +161,7 @@
                 @elseif(filled($mesa->manager_note))
                     <div style="white-space:pre-wrap;line-height:1.6">{!! nl2br(e($mesa->manager_note)) !!}</div>
                 @else
-                    <div style="color:var(--muted);background:rgba(123,45,38,.05);border-radius:.6rem;padding:.75rem">
+                    <div style="color:var(--muted);background:rgba(123,45,38,.05);border-radius: 0;padding:.75rem">
                         {{ __('Todavía no hay notas cargadas.') }}
                     </div>
                 @endif

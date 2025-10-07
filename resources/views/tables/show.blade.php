@@ -8,7 +8,7 @@
         .cover {
             width: 100%;
             height: 220px;
-            border-radius: 1rem;
+            border-radius: 0;
             object-fit: cover;
             border: 1px solid var(--border);
             background: #fafafa
@@ -26,7 +26,7 @@
 
         .chip {
             border: 1px solid var(--border);
-            border-radius: 999px;
+            border-radius: 0;
             padding: .1rem .55rem;
             font-size: .75rem
         }
