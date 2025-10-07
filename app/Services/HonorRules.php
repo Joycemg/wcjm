@@ -30,9 +30,8 @@ final class HonorRules
 
         $changed = (bool) $event->wasRecentlyCreated;
 
-        if (method_exists($user, 'removeHonorEventBySlug')) {
-            $changed = $user->removeHonorEventBySlug("{$slug}:undo") || $changed;
-        }
+        $changed = $this->removeHonorBySlug($user, "mesa:{$mesa->id}:signup:{$signup->id}:no_show") || $changed;
+        $changed = $this->removeHonorBySlug($user, "{$slug}:undo") || $changed;
 
         $this->refreshHonorAggregateIfNeeded($user, $changed);
 
@@ -92,12 +91,12 @@ final class HonorRules
 
         $changed = (bool) $event->wasRecentlyCreated;
 
-        if ($type === 'good' && method_exists($user, 'removeHonorEventBySlug')) {
-            $changed = $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:good") || $changed;
+        if ($type === 'good') {
+            $changed = $this->removeHonorBySlug($user, "mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:good") || $changed;
         }
 
-        if ($type === 'bad' && method_exists($user, 'removeHonorEventBySlug')) {
-            $changed = $user->removeHonorEventBySlug("mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:bad") || $changed;
+        if ($type === 'bad') {
+            $changed = $this->removeHonorBySlug($user, "mesa:{$mesa->id}:signup:{$signup->id}:behavior:undo:bad") || $changed;
         }
 
         $this->refreshHonorAggregateIfNeeded($user, $changed);
@@ -157,5 +156,23 @@ final class HonorRules
         if ($changed && method_exists($user, 'refreshHonorAggregate')) {
             $user->refreshHonorAggregate(true);
         }
+    }
+
+    private function removeHonorBySlug(User $user, string $slug): bool
+    {
+        $slug = trim($slug);
+        if ($slug === '') {
+            return false;
+        }
+
+        if (method_exists($user, 'removeHonorEventBySlug')) {
+            return $user->removeHonorEventBySlug($slug);
+        }
+
+        return HonorEvent::query()
+            ->where('user_id', $user->getKey())
+            ->where('slug', $slug)
+            ->limit(1)
+            ->delete() > 0;
     }
 }
