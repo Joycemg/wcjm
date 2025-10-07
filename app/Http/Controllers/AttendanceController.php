@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\DatabaseUtils;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\RedirectResponse;
 
 class AttendanceController extends Controller
@@ -45,36 +46,90 @@ class AttendanceController extends Controller
             'behavior' => ['nullable', 'in:good,regular,bad'],
         ]);
 
-        DB::transaction(function () use ($data, $mesa, $signup, $user) {
+        $hasAttendedColumn = $this->signupHasColumn('attended');
+        $hasBehaviorColumn = $this->signupHasColumn('behavior');
+        $hasLegacyConfirmedAt = $this->signupHasColumn('attendance_confirmed_at');
+        $hasLegacyConfirmedBy = $this->signupHasColumn('attendance_confirmed_by');
+        $hasLegacyNoShowAt = $this->signupHasColumn('no_show_at');
+        $hasLegacyNoShowBy = $this->signupHasColumn('no_show_by');
+
+        DB::transaction(function () use (
+            $data,
+            $mesa,
+            $signup,
+            $user,
+            $hasAttendedColumn,
+            $hasBehaviorColumn,
+            $hasLegacyConfirmedAt,
+            $hasLegacyConfirmedBy,
+            $hasLegacyNoShowAt,
+            $hasLegacyNoShowBy
+        ) {
             // Bloqueo pesimista para consistencia en hosting compartido
             /** @var Signup $row */
             $row = DatabaseUtils::applyPessimisticLock(
                 Signup::query()
-                    ->select(['id', 'user_id', 'game_table_id', 'attended', 'behavior'])
                     ->whereKey($signup->id)
             )->firstOrFail();
 
-            $prevAttended = (bool) ($row->attended ?? false);
-            $prevBehavior = (string) ($row->behavior ?? 'regular');
+            $prevAttended = $this->resolveAttendedState(
+                $row,
+                $hasAttendedColumn,
+                $hasLegacyConfirmedAt,
+                $hasLegacyNoShowAt
+            );
+            $prevBehavior = $this->resolveBehaviorState($row, $hasBehaviorColumn);
 
             // Persistimos cambios de estado en Signup (si vinieron en la request)
             $dirty = false;
+            $nowStamp = null;
             if (array_key_exists('attended', $data)) {
-                $row->attended = (bool) $data['attended'];
-                $dirty = true;
+                $nowAttended = (bool) $data['attended'];
+
+                if ($hasAttendedColumn && $row->attended !== $nowAttended) {
+                    $row->attended = $nowAttended;
+                    $dirty = true;
+                }
+
+                if ($hasLegacyConfirmedAt) {
+                    $nowStamp ??= now();
+                    $row->attendance_confirmed_at = $nowAttended ? $nowStamp : null;
+                    $dirty = true;
+                }
+                if ($hasLegacyConfirmedBy && $row->attendance_confirmed_by !== ($nowAttended ? $user->id : null)) {
+                    $row->attendance_confirmed_by = $nowAttended ? $user->id : null;
+                    $dirty = true;
+                }
+                if ($nowAttended) {
+                    if ($hasLegacyNoShowAt && $row->no_show_at !== null) {
+                        $row->no_show_at = null;
+                        $dirty = true;
+                    }
+                    if ($hasLegacyNoShowBy && $row->no_show_by !== null) {
+                        $row->no_show_by = null;
+                        $dirty = true;
+                    }
+                }
             }
-            if (array_key_exists('behavior', $data)) {
-                $row->behavior = (string) $data['behavior'];
-                $dirty = true;
+            if ($hasBehaviorColumn && array_key_exists('behavior', $data)) {
+                $newBehaviorValue = (string) $data['behavior'];
+                if ((string) ($row->behavior ?? '') !== $newBehaviorValue) {
+                    $row->behavior = $newBehaviorValue;
+                    $dirty = true;
+                }
             }
             if ($dirty) {
                 $row->save();
             }
 
+            $dirty = false;
+
             $mesaId = (int) $mesa->id;
             $signupId = (int) $row->id;
             /** @var User $target */
             $target = $row->user()->select(['id'])->firstOrFail();
+
+            $newBehavior = $this->resolveBehaviorState($row, $hasBehaviorColumn);
 
             // ---------------------------
             // Reglas de HONOR
@@ -84,7 +139,7 @@ class AttendanceController extends Controller
             if (array_key_exists('attended', $data)) {
                 $nowAttended = (bool) $data['attended'];
 
-                if ($nowAttended && !$prevAttended) {
+                if ($nowAttended && $prevAttended !== true) {
                     $this->addHonorSafe(
                         $target,
                         +10,
@@ -94,7 +149,7 @@ class AttendanceController extends Controller
                     );
                 }
 
-                if (!$nowAttended && $prevAttended) {
+                if (!$nowAttended && $prevAttended === true) {
                     $this->addHonorSafe(
                         $target,
                         -10,
@@ -107,6 +162,33 @@ class AttendanceController extends Controller
 
             // 2) No show: -20 (solo si NO vino attended=1 en esta misma request)
             if (($data['no_show'] ?? false) && !($data['attended'] ?? false)) {
+                if ($hasLegacyNoShowAt || $hasLegacyNoShowBy) {
+                    $nowStamp ??= now();
+                    if ($hasLegacyNoShowAt) {
+                        $row->no_show_at = $nowStamp;
+                        $dirty = true;
+                    }
+                    if ($hasLegacyNoShowBy) {
+                        $row->no_show_by = $user->id;
+                        $dirty = true;
+                    }
+                    if ($hasLegacyConfirmedAt && $row->attendance_confirmed_at !== null) {
+                        $row->attendance_confirmed_at = null;
+                        $dirty = true;
+                    }
+                    if ($hasLegacyConfirmedBy && $row->attendance_confirmed_by !== null) {
+                        $row->attendance_confirmed_by = null;
+                        $dirty = true;
+                    }
+                    if ($hasAttendedColumn && $row->attended !== false) {
+                        $row->attended = false;
+                        $dirty = true;
+                    }
+                    if ($dirty) {
+                        $row->save();
+                    }
+                }
+
                 $this->addHonorSafe(
                     $target,
                     -20,
@@ -117,8 +199,7 @@ class AttendanceController extends Controller
             }
 
             // 3) Comportamiento: transición entre good/regular/bad con undos correctos
-            $newBehavior = (string) ($row->behavior ?? 'regular');
-            if ($newBehavior !== $prevBehavior) {
+            if ($hasBehaviorColumn && $newBehavior !== $prevBehavior) {
                 if ($newBehavior === 'good') {
                     if ($prevBehavior === 'bad') {
                         $this->addHonorSafe(
@@ -195,5 +276,48 @@ class AttendanceController extends Controller
             ['user_id' => $user->id, 'slug' => $slug],
             ['points' => $points, 'reason' => $reason, 'meta' => $meta]
         );
+    }
+
+    private function signupHasColumn(string $column): bool
+    {
+        static $cache = [];
+
+        if (!array_key_exists($column, $cache)) {
+            $cache[$column] = Schema::hasColumn((new Signup())->getTable(), $column);
+        }
+
+        return $cache[$column];
+    }
+
+    private function resolveAttendedState(
+        Signup $signup,
+        bool $hasAttendedColumn,
+        bool $hasLegacyConfirmedAt,
+        bool $hasLegacyNoShowAt
+    ): ?bool {
+        if ($hasAttendedColumn) {
+            $value = $signup->getAttribute('attended');
+            return $value === null ? null : (bool) $value;
+        }
+
+        if ($hasLegacyConfirmedAt && $signup->getAttribute('attendance_confirmed_at')) {
+            return true;
+        }
+
+        if ($hasLegacyNoShowAt && $signup->getAttribute('no_show_at')) {
+            return false;
+        }
+
+        return null;
+    }
+
+    private function resolveBehaviorState(Signup $signup, bool $hasBehaviorColumn): string
+    {
+        if ($hasBehaviorColumn) {
+            $value = $signup->getAttribute('behavior');
+            return $value !== null ? (string) $value : 'regular';
+        }
+
+        return 'regular';
     }
 }
