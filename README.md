@@ -66,3 +66,17 @@ Aplicación Laravel optimizada para comunidades de rol y juegos de mesa. Incluye
 ## Deploy rápido en Hostinger
 
 La guía `docs/DEPLOY_HOSTINGER.md` resume los pasos para publicar el proyecto en un plan compartido (sin Redis ni colas externas). También encontrarás las nuevas variables de entorno para personalizar la sección de mesas destacadas en la home.
+
+## Sistema de honor
+
+El seguimiento de honor viene habilitado por defecto y puede controlarse desde variables de entorno:
+
+```
+FEATURES_HONOR_ENABLED=true
+FEATURES_HONOR_RANKING_PUBLIC=true
+FEATURES_HONOR_DECAY_INACTIVITY=true
+```
+
+- `FEATURES_HONOR_ENABLED` activa el cálculo automático de honor y las acciones de asistencia/comportamiento.
+- `FEATURES_HONOR_RANKING_PUBLIC` expone el ranking público (`/ranking/honor`) y los enlaces en la navegación.
+- `FEATURES_HONOR_DECAY_INACTIVITY` agenda el comando mensual `honor:decay-inactivity` para penalizar la inactividad.

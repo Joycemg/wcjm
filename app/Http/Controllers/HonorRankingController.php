@@ -13,6 +13,9 @@ class HonorRankingController extends Controller
 {
     public function __invoke(Request $request): HttpResponse
     {
+        abort_if(!config('features.honor.enabled', false), 404);
+        abort_if(!config('features.honor.ranking_public', false), 404);
+
         $perPage = $this->perPage($request, 50, 100);
         $q = trim((string) $request->query('q', ''));
 

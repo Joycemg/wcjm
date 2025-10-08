@@ -13,10 +13,11 @@ class DashboardController extends Controller
     {
         // Requiere middleware 'auth' en la ruta, pero por las dudas:
         $user = $request->user();
-        $honorFromUser = data_get($user, 'honor');
+        $honorEnabled = config('features.honor.enabled', false);
+        $honorFromUser = $honorEnabled ? data_get($user, 'honor') : null;
         $stats = [
             // Mantiene compatibilidad si tu User tiene accessor/attr 'honor'
-            'honor' => is_numeric($honorFromUser) ? (int) $honorFromUser : null,
+            'honor' => $honorEnabled && is_numeric($honorFromUser) ? (int) $honorFromUser : null,
             // Sumatoria real desde honor_events (si existe la tabla)
             'honor_total' => null,
         ];
@@ -59,7 +60,7 @@ class DashboardController extends Controller
         }
 
         // =============== Honor total (si hay tabla) ===============
-        if ($hasUsersHonorColumn) {
+        if ($honorEnabled && $hasUsersHonorColumn) {
             $storedHonor = (int) DB::table('users')
                 ->where('id', $user->id)
                 ->value('honor');
@@ -71,14 +72,14 @@ class DashboardController extends Controller
             }
         }
 
-        if ($hasHonorEvents) {
+        if ($honorEnabled && $hasHonorEvents) {
             $honorTotal = (int) DB::table('honor_events')
                 ->where('user_id', $user->id)
                 ->sum('points');
 
             $stats['honor_total'] = $honorTotal;
             $stats['honor'] = $honorTotal;
-        } elseif ($stats['honor'] === null && $hasUsersHonorColumn) {
+        } elseif ($honorEnabled && $stats['honor'] === null && $hasUsersHonorColumn) {
             // Instalaciones que persisten el agregado directo en users.honor.
             $stats['honor'] = $stats['honor_persisted'] ?? 0;
             $stats['honor_total'] = $stats['honor'];
