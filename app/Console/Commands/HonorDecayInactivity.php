@@ -31,6 +31,11 @@ class HonorDecayInactivity extends Command
 
     public function handle(): int
     {
+        if (!config('features.honor.enabled', false) || !config('features.honor.decay_inactivity', false)) {
+            $this->warn('Honor decay feature disabled. Nothing to do.');
+            return self::SUCCESS;
+        }
+
         // -------- 1) Resolver periodo (mes) --------
         $appTz = (string) ($this->option('tz') ?: config('app.timezone', 'UTC'));
 

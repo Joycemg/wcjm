@@ -560,7 +560,7 @@
                     </a>
                 @endif
 
-                @if (Route::has('ranking.honor'))
+                @if (Route::has('ranking.honor') && config('features.honor.enabled', false) && config('features.honor.ranking_public', false))
                     <a class="btn @if(request()->routeIs('ranking.*')) active @endif"
                        href="{{ route('ranking.honor') }}"
                        @if(request()->routeIs('ranking.*'))

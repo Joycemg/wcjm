@@ -30,6 +30,10 @@ $authVerified = array_values(array_filter([
     config('auth.require_email_verification', false) ? 'verified' : null,
 ]));
 
+$honorFeatures = (array) config('features.honor', []);
+$honorEnabled = (bool) data_get($honorFeatures, 'enabled', false);
+$honorRankingPublic = $honorEnabled && (bool) data_get($honorFeatures, 'ranking_public', false);
+
 /* =========================
  * HOME & DASHBOARD
  * ========================= */
@@ -86,21 +90,25 @@ Route::name('signups.')->prefix('mesas/{mesa}')
  * ASISTENCIA / COMPORTAMIENTO (HONOR)
  * scopeBindings garantiza que {signup} pertenezca a {mesa}
  * ========================= */
-Route::scopeBindings()->group(function () use ($authVerified) {
-    Route::post(
-        '/mesas/{mesa}/signups/{signup}/attendance',
-        [AttendanceController::class, 'update']
-    )
-        ->whereNumber('mesa')
-        ->whereNumber('signup')
-        ->middleware($authVerified)
-        ->name('mesas.signups.attendance');
-});
+if ($honorEnabled) {
+    Route::scopeBindings()->group(function () use ($authVerified) {
+        Route::post(
+            '/mesas/{mesa}/signups/{signup}/attendance',
+            [AttendanceController::class, 'update']
+        )
+            ->whereNumber('mesa')
+            ->whereNumber('signup')
+            ->middleware($authVerified)
+            ->name('mesas.signups.attendance');
+    });
+}
 
 /* =========================
  * RANKING DE HONOR (público)
  * ========================= */
-Route::get('/ranking/honor', HonorRankingController::class)->name('ranking.honor');
+if ($honorRankingPublic) {
+    Route::get('/ranking/honor', HonorRankingController::class)->name('ranking.honor');
+}
 
 /* =========================
  * PERFIL

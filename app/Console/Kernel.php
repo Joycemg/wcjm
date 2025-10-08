@@ -15,6 +15,10 @@ class Kernel extends ConsoleKernel
 
      protected function schedule(Schedule $schedule): void
      {
+          if (!config('features.honor.decay_inactivity', false)) {
+               return;
+          }
+
           $schedule->command('honor:decay-inactivity')
                ->monthlyOn(1, '03:00')
                ->timezone(config('app.timezone', 'America/Argentina/La_Rioja'))

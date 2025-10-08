@@ -21,6 +21,8 @@ class AttendanceController extends Controller
      */
     public function update(Request $request, GameTable $mesa, Signup $signup): RedirectResponse
     {
+        abort_if(!config('features.honor.enabled', false), 404);
+
         $user = $request->user();
         abort_unless($user instanceof User, 403);
         \assert($user instanceof User);

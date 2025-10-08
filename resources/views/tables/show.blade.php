@@ -229,6 +229,7 @@
         }
 
         $canManageHonor = $canManageHonor ?? ($isOwner || $isManager || $isAdmin);
+        $honorEnabled = (bool) data_get(config('features.honor', []), 'enabled', false);
 
         $manager = $mesa->manager;
         $creator = $mesa->creator;
@@ -342,9 +343,11 @@
                         </div>
                     @endif
 
-                    <p class="honor-note">
-                        💡 {{ __('Quien administra la mesa puede marcar asistencia, ausencias y comportamiento: el honor se actualiza en forma automática.') }}
-                    </p>
+                    @if($honorEnabled)
+                        <p class="honor-note">
+                            💡 {{ __('Quien administra la mesa puede marcar asistencia, ausencias y comportamiento: el honor se actualiza en forma automática.') }}
+                        </p>
+                    @endif
 
                     @if($canManageHonor && filled($managerNote))
                         <div class="honor-note">
@@ -446,7 +449,7 @@
                                                 <span class="status-pill {{ $behaviorStatus['class'] }}">{{ $behaviorStatus['label'] }}</span>
                                             </td>
                                         </tr>
-                                        @if($canManageHonor)
+                                        @if($honorEnabled && $canManageHonor)
                                             <tr class="honor-form-row">
                                                 <td colspan="5">
                                                     <form method="POST"
@@ -558,7 +561,7 @@
                                                 <span class="status-pill {{ $behaviorStatus['class'] }}">{{ $behaviorStatus['label'] }}</span>
                                             </td>
                                         </tr>
-                                        @if($canManageHonor)
+                                        @if($honorEnabled && $canManageHonor)
                                             <tr class="honor-form-row">
                                                 <td colspan="5">
                                                     <form method="POST"
