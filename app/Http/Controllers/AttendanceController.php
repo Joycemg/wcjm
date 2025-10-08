@@ -27,6 +27,16 @@ class AttendanceController extends Controller
         abort_unless($user instanceof User, 403);
         \assert($user instanceof User);
 
+        $quickAction = (string) $request->input('quick_action', '');
+        if ($quickAction === 'confirm_attend_good') {
+            $request->merge([
+                'attended' => 1,
+                'behavior' => 'good',
+                'no_show' => 0,
+            ]);
+        }
+        $request->request->remove('quick_action');
+
         // Normalizamos selects con valor "sin cambios" antes de validar.
         if ($request->input('attended') === '_keep_') {
             $request->request->remove('attended');

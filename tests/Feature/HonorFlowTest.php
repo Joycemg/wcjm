@@ -102,6 +102,39 @@ class HonorFlowTest extends TestCase
         $this->assertSame(10, $player->refresh()->refreshHonorAggregate());
     }
 
+    public function test_quick_action_confirms_attendance_and_behavior(): void
+    {
+        $manager = User::factory()->create();
+        $player = User::factory()->create();
+
+        $mesa = GameTable::create([
+            'title' => 'Mesa cerrada',
+            'capacity' => 4,
+            'created_by' => $manager->id,
+            'is_open' => false,
+        ]);
+
+        $signup = Signup::create([
+            'game_table_id' => $mesa->id,
+            'user_id' => $player->id,
+            'is_counted' => true,
+            'is_manager' => false,
+            'attended' => null,
+            'behavior' => null,
+        ]);
+
+        $controller = app(AttendanceController::class);
+
+        $this->callAttendanceUpdate($controller, $manager, $mesa, $signup, [
+            'quick_action' => 'confirm_attend_good',
+        ]);
+
+        $signup->refresh();
+        $this->assertTrue($signup->attended);
+        $this->assertSame('good', $signup->behavior);
+        $this->assertSame(20, $player->refresh()->refreshHonorAggregate());
+    }
+
     private function callAttendanceUpdate(
         AttendanceController $controller,
         User $manager,
