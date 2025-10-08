@@ -190,6 +190,17 @@
             color: inherit
         }
 
+        .honor-quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+            margin-top: .5rem;
+        }
+
+        .honor-quick-actions .btn {
+            font-size: .85rem;
+        }
+
         .honor-note {
             font-size: .85rem;
             color: var(--muted);
@@ -387,6 +398,12 @@
                             {{ __('Jugadores') }} ({{ $players->count() }}/{{ (int) $mesa->capacity }})
                         </h3>
 
+                        @if(!$isOpenNow && $honorEnabled && $canManageHonor)
+                            <p class="honor-note" style="margin:.25rem 0 .75rem">
+                                {{ __('Mesa cerrada: confirmá asistencia y comportamiento para ajustar el honor automáticamente.') }}
+                            </p>
+                        @endif
+
                         @if(!$managerCountsAsPlayer)
                             <p class="muted" style="margin-top:-.25rem">{{ __('El encargado no ocupa un lugar de jugador en esta mesa.') }}</p>
                         @endif
@@ -483,6 +500,16 @@
                                                             <button class="btn ok"
                                                                     type="submit">{{ __('Aplicar cambios') }}</button>
                                                         </div>
+                                                        @if(!$isOpenNow)
+                                                            <div class="honor-quick-actions">
+                                                                <button class="btn"
+                                                                        type="submit"
+                                                                        name="quick_action"
+                                                                        value="confirm_attend_good">
+                                                                    ✅ {{ __('Confirmar asistencia + buen comportamiento (+20)') }}
+                                                                </button>
+                                                            </div>
+                                                        @endif
                                                     </form>
                                                 </td>
                                             </tr>
@@ -595,6 +622,16 @@
                                                             <button class="btn ok"
                                                                     type="submit">{{ __('Aplicar cambios') }}</button>
                                                         </div>
+                                                        @if(!$isOpenNow)
+                                                            <div class="honor-quick-actions">
+                                                                <button class="btn"
+                                                                        type="submit"
+                                                                        name="quick_action"
+                                                                        value="confirm_attend_good">
+                                                                    ✅ {{ __('Confirmar asistencia + buen comportamiento (+20)') }}
+                                                                </button>
+                                                            </div>
+                                                        @endif
                                                     </form>
                                                 </td>
                                             </tr>
